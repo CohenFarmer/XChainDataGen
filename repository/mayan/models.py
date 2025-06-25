@@ -197,7 +197,7 @@ class MayanOrderCreated(Base):
 
     def __init__(self, key, blockchain, transaction_hash):
         self.key = key
-        self.blockchain = (blockchain,)
+        self.blockchain = blockchain
         self.transaction_hash = transaction_hash
 
     def __repr__(self):
@@ -219,7 +219,7 @@ class MayanOrderFulfilled(Base):
 
     def __init__(self, key, blockchain, transaction_hash, sequence, net_amount):
         self.key = key
-        self.blockchain = (blockchain,)
+        self.blockchain = blockchain
         self.transaction_hash = transaction_hash
         self.sequence = sequence
         self.net_amount = net_amount
@@ -242,7 +242,7 @@ class MayanOrderUnlocked(Base):
     transaction_hash = Column(String(66), nullable=False)
 
     def __init__(self, key, blockchain, transaction_hash):
-        self.blockchain = (blockchain,)
+        self.blockchain = blockchain
         self.transaction_hash = transaction_hash
         self.key = key
 
