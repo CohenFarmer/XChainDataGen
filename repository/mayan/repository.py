@@ -6,10 +6,17 @@ from .models import (
     MayanBlockchainTransaction,
     MayanCrossChainTransaction,
     MayanForwarded,
+    MayanFulfillOrder,
+    MayanInitOrder,
     MayanOrderCreated,
     MayanOrderFulfilled,
     MayanOrderUnlocked,
+    MayanRegisterOrder,
+    MayanSetAuctionWinner,
+    MayanSettle,
     MayanSwapAndForwarded,
+    MayanUnlock,
+    MayanUnlockBatch,
 )
 
 
@@ -64,6 +71,81 @@ class MayanOrderUnlockedRepository(BaseRepository):
     def event_exists(self, key: str):
         with self.get_session() as session:
             return session.query(MayanOrderUnlocked).filter(MayanOrderUnlocked.key == key).first()
+
+
+class MayanInitOrderRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanInitOrder, session_factory)
+
+    def event_exists(self, order_hash: str):
+        with self.get_session() as session:
+            return session.query(self.model).filter(self.model.order_hash == order_hash).first()
+
+
+class MayanUnlockBatchRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanUnlockBatch, session_factory)
+
+    def event_exists(self, batch_id: str):
+        with self.get_session() as session:
+            return session.query(self.model).filter(MayanUnlockBatch.batch_id == batch_id).first()
+
+
+class MayanUnlockRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanUnlock, session_factory)
+
+    def event_exists(self, state_from_acc: str):
+        with self.get_session() as session:
+            return (
+                session.query(self.model)
+                .filter(MayanUnlock.state_from_acc == state_from_acc)
+                .first()
+            )
+
+
+class MayanFulfillOrderRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanFulfillOrder, session_factory)
+
+    def event_exists(self, signature: str):
+        with self.get_session() as session:
+            return (
+                session.query(self.model).filter(MayanFulfillOrder.signature == signature).first()
+            )
+
+
+class MayanSettleRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanSettle, session_factory)
+
+    def event_exists(self, signature: str):
+        with self.get_session() as session:
+            return session.query(self.model).filter(MayanSettle.signature == signature).first()
+
+
+class MayanSetAuctionWinnerRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanSetAuctionWinner, session_factory)
+
+    def event_exists(self, auction: str):
+        with self.get_session() as session:
+            return (
+                session.query(self.model).filter(MayanSetAuctionWinner.auction == auction).first()
+            )
+
+
+class MayanRegisterOrderRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanRegisterOrder, session_factory)
+
+    def event_exists(self, order_hash: str):
+        with self.get_session() as session:
+            return (
+                session.query(self.model)
+                .filter(MayanRegisterOrder.order_hash == order_hash)
+                .first()
+            )
 
 
 class MayanBlockchainTransactionRepository(BaseRepository):

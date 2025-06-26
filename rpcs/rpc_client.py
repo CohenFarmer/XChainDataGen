@@ -10,7 +10,7 @@ from config.constants import (
     MAX_NUM_THREADS_EXTRACTOR,
     RPCS_CONFIG_FILE,
 )
-from utils.utils import CustomException
+from utils.utils import CustomException, load_solana_api_key
 
 
 class RPCClient(ABC):
@@ -85,8 +85,20 @@ class RPCClient(ABC):
                         "method": method,
                         "params": params,
                     }
+
+                    if blockchain_name == "solana":
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "Authorization": f"Bearer {load_solana_api_key()}",
+                        }
+                    else:
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                        }
                     try:
-                        response = requests.post(rpc_url, json=payload, timeout=10)
+                        response = requests.post(rpc_url, json=payload, headers=headers, timeout=10)
                         response.raise_for_status()
 
                         if response.json() is None or response.json()["result"] is None:
