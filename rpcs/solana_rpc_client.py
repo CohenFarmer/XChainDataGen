@@ -1,10 +1,18 @@
+import json
+
 import requests
 
 from config.constants import (
     RPCS_CONFIG_FILE,
 )
 from rpcs.rpc_client import RPCClient
-from utils.utils import CustomException, load_solana_decoder_url
+from utils.utils import (
+    CliColor,
+    CustomException,
+    build_log_message_solana,
+    load_solana_decoder_url,
+    log_to_cli,
+)
 
 
 class SolanaRPCClient(RPCClient):
@@ -24,6 +32,18 @@ class SolanaRPCClient(RPCClient):
         lastSignature = end_signature  # the endpoint works by fetching in reverse order
 
         while True:
+            log_to_cli(
+                build_log_message_solana(
+                    start_signature,
+                    end_signature,
+                    self.bridge,
+                    (
+                        f"Retrieving all signatures for {account_address}..."
+                        f"({len(all_signatures)} signatures fetched so far)",
+                    ),
+                )
+            )
+
             fetchedTransactions = self.req_get_signatures_for_address(
                 [
                     account_address,
@@ -36,6 +56,22 @@ class SolanaRPCClient(RPCClient):
 
             if len(fetchedTransactions) != 1000:
                 break
+
+        with open("fetched_signatures.json", "a") as f:
+            f.write(json.dumps(all_signatures) + "\n")
+
+        log_to_cli(
+            build_log_message_solana(
+                start_signature,
+                end_signature,
+                self.bridge,
+                (
+                    f"Retried all signatures for {account_address}..."
+                    f"({len(all_signatures)} signatures fetched)",
+                ),
+            ),
+            CliColor.SUCCESS,
+        )
 
         return all_signatures
 

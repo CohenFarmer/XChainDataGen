@@ -212,7 +212,7 @@
         "type": "debugpy",
         "request": "launch",
         "program": "${workspaceFolder}/__init__.py",
-        "args": ["extract", "--bridge", "mayan", "--start_ts", "1741219200", "--end_ts", "1741996800", "--blockchains", "ethereum", "base", "avalanche", "optimism", "arbitrum", "bnb", "polygon", "linea"],
+        "args": ["extract", "--bridge", "mayan", "--start_ts", "1746054000", "--end_ts", "1746226800", "--blockchains", "solana", "ethereum", "base", "avalanche", "optimism", "arbitrum", "bnb", "polygon", "linea", "--start_signature", "4AEnT1cquemxzKt3gschN8P1SWwxiEGqanfFuFnRSRx8v7bRbJxUKryCrChHpAyvW8nL3iVPuYB6A4uzUzcvjq4L", "--end_signature", "5jJRAbP7CAPQvvqpntq3mA3ygx7phegbRoU2T5cafXd4W3iNmHQ21Jmkgonuqt9TAZCoe1DEf14cb6XQ8kd3REM6"],
         "console": "integratedTerminal",
         "justMyCode": true,
         "python": "${workspaceFolder}/.xchaindata/bin/python",

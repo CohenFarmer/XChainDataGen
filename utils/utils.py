@@ -189,12 +189,10 @@ def build_log_message_2(
     return message
 
 
-def build_log_message_solana(
-    start_sig: str, end_sig: str, bridge: Bridge, blockchain: str, message: str = ""
-):
+def build_log_message_solana(start_sig: str, end_sig: str, bridge: Bridge, message: str = ""):
     short_start = f"{start_sig[:3]}...{start_sig[-3:]}"
     short_end = f"{end_sig[:3]}...{end_sig[-3:]}"
-    message = f"Signature range {short_start}-{short_end} in {blockchain} -- {message}"
+    message = f"Signature range {short_start}-{short_end} in solana -- {message}"
     message = f"{datetime.now()} - INFO - {bridge.value} - {message}"
 
     return message

@@ -1,3 +1,4 @@
+# import json
 import threading
 import time
 
@@ -51,19 +52,26 @@ class SolanaExtractor(Extractor):
                 start_signature,
                 end_signature,
                 self.bridge,
-                self.blockchain,
                 "Processing logs and transactions...",
             )
         )
 
         decoded_instructions = []
         for signature in signatures:
-            if self.handler.does_transaction_exist_by_hash(signature):
-                continue
+            try:
+                if self.handler.does_transaction_exist_by_hash(signature):
+                    continue
 
-            decoded_tx = self.rpc_client.parseTransactionByHash(signature)
+                decoded_tx = self.rpc_client.parseTransactionByHash(signature)
 
-            decoded_instructions.append(decoded_tx)
+                decoded_instructions.append(decoded_tx)
+
+            except CustomException as e:
+                request_desc = (
+                    f"Error processing transaction: {self.bridge}, {self.blockchain}, "
+                    f"{signature}. Error: {e}"
+                )
+                log_error(self.bridge, request_desc)
 
         included_txs = self.handler.handle_solana_events(
             self.blockchain, start_signature, end_signature, decoded_instructions
@@ -90,6 +98,10 @@ class SolanaExtractor(Extractor):
             self.solana_program_id, start_signature, end_signature
         )
 
+        # if we already have signatures fetched, we can skip fetching them again
+        # with open("fetched_signatures.json", "r") as f:
+        #     all_signatures = json.load(f)
+
         all_signatures = list(map(lambda x: x["signature"], all_signatures))
 
         if not all_signatures:
@@ -98,7 +110,6 @@ class SolanaExtractor(Extractor):
                     start_signature,
                     end_signature,
                     self.solana_program_id,
-                    self.bridge,
                     self.blockchain,
                     "No transaction signatures found in the specified range.",
                 ),
@@ -110,7 +121,7 @@ class SolanaExtractor(Extractor):
 
         # num_threads = self.rpc_client.max_threads_per_blockchain(self.blockchain) * 2
 
-        num_threads = 1
+        num_threads = 15
 
         # Ensure at least 1 per chunk, capped at 1000
         chunk_size = max(1, min((len(all_signatures) + num_threads - 1) // num_threads, 1000))
@@ -127,7 +138,6 @@ class SolanaExtractor(Extractor):
                 start_signature,
                 end_signature,
                 self.bridge,
-                self.blockchain,
                 (
                     f"Launching {num_threads} threads to process {len(block_ranges)} signatures "
                     f"ranges...",
@@ -152,7 +162,6 @@ class SolanaExtractor(Extractor):
                 start_signature,
                 end_signature,
                 self.bridge,
-                self.blockchain,
                 (
                     f"Finished processing logs and transactions. Time taken: "
                     f"{end_time - start_time} seconds.",

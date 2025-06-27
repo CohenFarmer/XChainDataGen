@@ -27,6 +27,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      solana-decoder:
+        condition: service_started
     env_file: ".env"
     entrypoint: ["python", "/app/__init__.py"]
     volumes:
@@ -35,5 +37,15 @@ services:
     networks:
       - default_nw
 
+  solana-decoder:
+    image: aaugusto11/solana-tx-decoder:efdee2b
+    container_name: solana_decoder
+    ports:
+      - "3000:3000"
+    environment:
+      - SOLANA_RPC_URL=xxx
+      - SOLANA_API_KEY=xxx
+    networks:
+      - default_nw
 volumes:
   pgdata:

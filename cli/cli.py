@@ -98,21 +98,11 @@ class Cli:
                 start_signature,
                 end_signature,
                 bridge,
-                blockchain,
                 f"{idx + 1}/{len(blockchains)} Starting extraction... ",
             )
         )
 
         try:
-            log_to_cli(
-                build_log_message_solana(
-                    start_signature,
-                    end_signature,
-                    bridge,
-                    blockchain,
-                    "Loading Solana Decoder",
-                )
-            )
             extractor = SolanaExtractor(bridge, blockchain, blockchains)
         except Exception as e:
             log_to_cli(
@@ -120,7 +110,6 @@ class Cli:
                     start_signature,
                     end_signature,
                     bridge,
-                    blockchain,
                     f"{idx + 1}/{len(blockchains)} Error: {e}",
                 ),
                 CliColor.ERROR,

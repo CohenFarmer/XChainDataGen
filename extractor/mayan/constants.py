@@ -238,8 +238,11 @@ BLOCKCHAIN_IDS = {
         "nativeChainId": 56,
         "name": "bnb",
     },
+    "1": {
+        "nativeChainId": None,
+        "name": "solana",
+    },
 }
-
 
 
 WETH_CONTRACT_ADDRESSES = {
@@ -268,3 +271,5 @@ WETH_CONTRACT_ADDRESSES = {
         "contract_address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
     },
 }
+
+SOLANA_PROGRAM_ADDRESS = "BLZRi6frs4X4DNLw56V4EXai1b6QVESN1BhHBTYM9VcY"

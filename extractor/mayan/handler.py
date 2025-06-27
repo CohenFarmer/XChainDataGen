@@ -2,26 +2,50 @@ from typing import Any, Dict, List
 
 from config.constants import Bridge
 from extractor.base_handler import BaseHandler
-from extractor.mayan.constants import BLOCKCHAIN_IDS, BRIDGE_CONFIG, WETH_CONTRACT_ADDRESSES
+from extractor.mayan.constants import (
+    BLOCKCHAIN_IDS,
+    BRIDGE_CONFIG,
+    SOLANA_PROGRAM_ADDRESS,
+    WETH_CONTRACT_ADDRESSES,
+)
+from extractor.mayan.utils.OrderHash import reconstruct_order_hash_from_params
 from repository.database import DBSession
 from repository.mayan.repository import (
     MayanBlockchainTransactionRepository,
     MayanForwardedRepository,
+    MayanFulfillOrderRepository,
+    MayanInitOrderRepository,
     MayanOrderCreatedRepository,
     MayanOrderFulfilledRepository,
     MayanOrderUnlockedRepository,
+    MayanRegisterOrderRepository,
+    MayanSetAuctionWinnerRepository,
+    MayanSettleRepository,
     MayanSwapAndForwardedRepository,
+    MayanUnlockBatchRepository,
+    MayanUnlockRepository,
 )
-from utils.rpc_utils import RPCClient
-from utils.utils import CustomException, log_error
+from rpcs.evm_rpc_client import EvmRPCClient
+from utils.utils import (
+    CustomException,
+    convert_32_byte_array_to_evm_address,
+    convert_32_byte_array_to_solana_address,
+    log_error,
+)
 
 
 class MayanHandler(BaseHandler):
     CLASS_NAME = "MayanHandler"
 
-    def __init__(self, rpc_client: RPCClient, blockchains: list) -> None:
+    def __init__(self, rpc_client: EvmRPCClient, blockchains: list) -> None:
         super().__init__(rpc_client, blockchains)
         self.bridge = Bridge.MAYAN
+
+    def get_solana_bridge_program_id(self) -> str:
+        """
+        Returns the Solana bridge program ID for Mayan.
+        """
+        return SOLANA_PROGRAM_ADDRESS
 
     def get_bridge_contracts_and_topics(self, bridge: str, blockchain: List[str]) -> None:
         return super().get_bridge_contracts_and_topics(
@@ -37,6 +61,13 @@ class MayanHandler(BaseHandler):
         self.order_unlocked_repo = MayanOrderUnlockedRepository(DBSession)
         self.swap_and_forwarded_repo = MayanSwapAndForwardedRepository(DBSession)
         self.forwarded_repo = MayanForwardedRepository(DBSession)
+        self.init_order_repo = MayanInitOrderRepository(DBSession)
+        self.unlock_batch_repo = MayanUnlockBatchRepository(DBSession)
+        self.unlock_repo = MayanUnlockRepository(DBSession)
+        self.fulfill_repo = MayanFulfillOrderRepository(DBSession)
+        self.settle_repo = MayanSettleRepository(DBSession)
+        self.set_auction_winner_repo = MayanSetAuctionWinnerRepository(DBSession)
+        self.register_order_repo = MayanRegisterOrderRepository(DBSession)
 
     def handle_transactions(self, transactions: List[Dict[str, Any]]) -> None:
         func_name = "handle_transactions"
@@ -391,3 +422,422 @@ class MayanHandler(BaseHandler):
             The WETH token address.
         """
         return WETH_CONTRACT_ADDRESSES[blockchain]["contract_address"]
+
+    ### LOGIC FOR SOLANA ###
+
+    def handle_solana_events(
+        self,
+        blockchain: str,
+        start_signature: str,
+        end_signature: str,
+        decoded_transactions: Dict,
+    ):
+        included_txs = []
+
+        for decoded_transaction in decoded_transactions:
+            if (
+                not decoded_transaction
+                or decoded_transaction["transaction"]["meta"]["err"] is not None
+            ):
+                # Skip transactions with errors
+                continue
+
+            signature = decoded_transaction["transaction"]["transaction"]["signatures"][0]
+            transaction_instructions = decoded_transaction["instructions"]
+
+            mayan_instructions = [
+                (idx, instr)
+                for idx, instr in enumerate(transaction_instructions)
+                if instr["programId"] == self.get_solana_bridge_program_id()
+            ]
+
+            try:
+                for idx, instruction in mayan_instructions:
+                    included = False
+
+                    if instruction["name"] == "initOrder":
+                        transfer_instruction = None
+
+                        if transaction_instructions[idx - 1]["name"] == "transfer":
+                            transfer_instruction = transaction_instructions[idx - 1]
+                        elif transaction_instructions[idx - 1]["name"] == "closeAccount":
+                            transfer_instruction = transaction_instructions[idx - 2]
+
+                        included = self.handle_init_order(
+                            signature, transfer_instruction, instruction
+                        )
+                    elif instruction["name"] == "unlockBatch":
+                        included = self.handle_unlock(
+                            signature,
+                            transaction_instructions[idx + 1],
+                            instruction,
+                        )
+                    elif instruction["name"] == "unlock":
+                        included = self.handle_unlock(
+                            signature,
+                            transaction_instructions[idx + 1],
+                            instruction,
+                        )
+                    elif instruction["name"] == "fulfill":
+                        if transaction_instructions[idx - 2]["name"] == "transferChecked":
+                            transfer_instruction = transaction_instructions[idx - 2]
+                        elif transaction_instructions[idx - 1]["name"] == "transfer":
+                            transfer_instruction = transaction_instructions[idx - 1]
+
+                        included = self.handle_fulfill(signature, transfer_instruction, instruction)
+                    elif instruction["name"] == "settle":
+                        included = self.handle_settle(
+                            signature,
+                            instruction,
+                        )
+                    elif instruction["name"] == "setAuctionWinner":
+                        included = self.set_auction_winner(
+                            signature,
+                            instruction,
+                        )
+                    elif instruction["name"] == "registerOrder":
+                        included = self.handle_register_order(
+                            signature,
+                            instruction,
+                        )
+
+                if included:
+                    included_txs.append(decoded_transaction)
+
+            except Exception as e:
+                request_desc = (
+                    f"Error processing request: {blockchain}, {start_signature}, "
+                    f"{end_signature}.\n{e}"
+                )
+                log_error(self.bridge, request_desc)
+
+        return included_txs
+
+    def extract_accounts_from_instruction(
+        self, instruction: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Extracts accounts from a Solana instruction.
+        Args:
+            instruction: The Solana instruction to extract accounts from.
+        Returns:
+            A list of accounts extracted from the instruction.
+        """
+        accounts = {}
+
+        for account in instruction.get("accounts", []):
+            if account["name"] not in accounts:
+                accounts[account["name"]] = account["pubkey"]
+
+        return accounts
+
+    def handle_init_order(
+        self, signature: str, transfer_instruction: Dict[str, Any], instruction: Dict[str, Any]
+    ):
+        func_name = "handle_init_order"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        params = instruction["args"]["params"]
+
+        try:
+            order_hash = reconstruct_order_hash_from_params(
+                trader=account_data["trader"],
+                token_in=account_data["mintFrom"],
+                src_chain_id=1,
+                params=params,
+            )
+
+            if self.init_order_repo.event_exists(order_hash):
+                return None
+
+            dst_chain = self.convert_id_to_blockchain_name(
+                id=params["chainDest"],
+                blockchain_ids=BLOCKCHAIN_IDS,
+            )
+
+            if not dst_chain:
+                return None
+
+            # we need to extract the amount being sent to the order
+            # by fetching the transfer instruction before the initOrder instruction
+            if (
+                transfer_instruction["name"] != "transfer"
+                and transfer_instruction["name"] != "transferChecked"
+            ):
+                raise CustomException(
+                    self.CLASS_NAME,
+                    func_name,
+                    f"Expected transfer instruction, got {transfer_instruction['name']}",
+                )
+
+            amount_in = int(transfer_instruction["args"]["amount"], 16)
+
+            self.init_order_repo.create(
+                {
+                    "order_hash": order_hash,
+                    "signature": signature,
+                    "trader": account_data["trader"],
+                    "relayer": account_data["relayer"],
+                    "state": account_data["state"],
+                    "state_from_acc": account_data["stateFromAcc"],
+                    "relayer_fee_acc": account_data["relayerFeeAcc"],
+                    "mint_from": account_data["mintFrom"],
+                    "fee_manager_program": account_data["feeManagerProgram"],
+                    "token_program": account_data["tokenProgram"],
+                    "system_program": account_data["systemProgram"],
+                    "amount_in_min": int(params["amountInMin"], 16),
+                    "amount_in": amount_in,
+                    "native_input": params["nativeInput"],
+                    "fee_submit": int(params["feeSubmit"], 16),
+                    "addr_dest": convert_32_byte_array_to_evm_address(params["addrDest"]),
+                    "chain_dest": dst_chain,
+                    "token_out": convert_32_byte_array_to_evm_address(params["tokenOut"]),
+                    "amount_out_min": int(params["amountOutMin"], 16),
+                    "gas_drop": int(params["gasDrop"], 16),
+                    "fee_cancel": int(params["feeCancel"], 16),
+                    "fee_refund": int(params["feeRefund"], 16),
+                    "deadline": int(params["deadline"], 16),
+                    "addr_ref": convert_32_byte_array_to_evm_address(params["addrRef"]),
+                    "fee_rate_ref": params["feeRateRef"],
+                    "fee_rate_mayan": params["feeRateMayan"],
+                    "auction_mode": params["auctionMode"],
+                    "key_rnd": bytes(params["keyRnd"]).hex(),
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def handle_unlock(
+        self, signature: str, transfer_instruction: Dict[str, Any], instruction: Dict[str, Any]
+    ):
+        func_name = "handle_unlock"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        try:
+            if self.unlock_repo.event_exists(account_data["stateFromAcc"]):
+                return None
+
+            if transfer_instruction["name"] != "transfer":
+                raise CustomException(
+                    self.CLASS_NAME,
+                    func_name,
+                    f"Expected transfer instruction, got {transfer_instruction['name']}",
+                )
+
+            amount = int(transfer_instruction["args"]["amount"], 16)
+
+            self.unlock_repo.create(
+                {
+                    "signature": signature,
+                    "vaa_unlock": account_data["vaaUnlock"],
+                    "state": account_data["state"],
+                    "state_from_acc": account_data["stateFromAcc"],
+                    "mint_from": account_data["mintFrom"],
+                    "driver": account_data["driver"],
+                    "driver_acc": account_data["driverAcc"],
+                    "token_program": account_data["tokenProgram"],
+                    "system_program": account_data["systemProgram"],
+                    "amount": amount,
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def handle_fulfill(
+        self, signature: str, transfer_instruction: Dict[str, Any], instruction: Dict[str, Any]
+    ):
+        func_name = "handle_fulfill"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        addr_unlocker = convert_32_byte_array_to_solana_address(
+            instruction["args"]["addrUnlocker"]["data"]
+        )
+
+        try:
+            if self.fulfill_repo.event_exists(signature):
+                return None
+
+            # we need to extract the amount being sent to the order
+            # by fetching the transfer instruction before the initOrder instruction
+            if (
+                transfer_instruction["name"] != "transfer"
+                and transfer_instruction["name"] != "transferChecked"
+            ):
+                raise CustomException(
+                    self.CLASS_NAME,
+                    func_name,
+                    f"Expected transfer instruction, got {transfer_instruction['name']}",
+                )
+
+            amount_in = int(transfer_instruction["args"]["amount"], 16)
+
+            self.fulfill_repo.create(
+                {
+                    "signature": signature,
+                    "state": account_data["state"],
+                    "driver": account_data["driver"],
+                    "state_to_acc": account_data["stateToAcc"],
+                    "mint_to": account_data["mintTo"],
+                    "dest": account_data["dest"],
+                    "system_program": account_data["systemProgram"],
+                    "addr_unlocker": addr_unlocker,
+                    "amount": amount_in,
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def handle_settle(self, signature: str, instruction: Dict[str, Any]):
+        func_name = "handle_settle"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        try:
+            if self.settle_repo.event_exists(signature):
+                return None
+
+            self.settle_repo.create(
+                {
+                    "signature": signature,
+                    "state": account_data["state"],
+                    "state_to_acc": account_data.get("stateToAcc"),
+                    "relayer": account_data.get("relayer"),
+                    "mint_to": account_data.get("mintTo"),
+                    "dest": account_data.get("dest"),
+                    "referrer": account_data.get("referrer"),
+                    "fee_collector": account_data.get("feeCollector"),
+                    "referrer_fee_acc": account_data.get("referrerFeeAcc"),
+                    "mayan_fee_acc": account_data.get("mayanFeeAcc"),
+                    "dest_acc": account_data.get("destAcc"),
+                    "token_program": account_data.get("tokenProgram"),
+                    "system_program": account_data.get("systemProgram"),
+                    "associated_token_program": account_data.get("associatedTokenProgram"),
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def set_auction_winner(self, signature: str, instruction: Dict[str, Any]):
+        func_name = "set_auction_winner"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        try:
+            if self.set_auction_winner_repo.event_exists(signature):
+                return None
+
+            expected_winner = instruction["args"]["expectedWinner"]
+
+            self.set_auction_winner_repo.create(
+                {
+                    "signature": signature,
+                    "state": account_data["state"],
+                    "auction": account_data["auction"],
+                    "expected_winner": expected_winner,
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def handle_register_order(self, signature: str, instruction: Dict[str, Any]):
+        func_name = "handle_register_order"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        params = instruction["args"]["args"]
+
+        try:
+            order_hash = reconstruct_order_hash_from_params(
+                trader=convert_32_byte_array_to_evm_address(params["trader"]),
+                token_in=convert_32_byte_array_to_evm_address(params["tokenIn"]),
+                src_chain_id=params["chainSource"],
+                params=params,
+            )
+
+            if self.register_order_repo.event_exists(order_hash):
+                return None
+
+            src_chain = self.convert_id_to_blockchain_name(
+                id=params["chainSource"],
+                blockchain_ids=BLOCKCHAIN_IDS,
+            )
+
+            dst_chain = self.convert_id_to_blockchain_name(
+                id=params["chainDest"],
+                blockchain_ids=BLOCKCHAIN_IDS,
+            )
+
+            if not src_chain or not dst_chain:
+                return None
+
+            self.register_order_repo.create(
+                {
+                    "order_hash": order_hash,
+                    "signature": signature,
+                    "relayer": account_data["relayer"],
+                    "state": account_data["state"],
+                    "system_program": account_data["systemProgram"],
+                    "trader": convert_32_byte_array_to_evm_address(params["trader"]),
+                    "chain_source": src_chain,
+                    "token_in": convert_32_byte_array_to_evm_address(params["tokenIn"]),
+                    "addr_dest": convert_32_byte_array_to_solana_address(params["addrDest"]),
+                    "chain_dest": dst_chain,
+                    "token_out": convert_32_byte_array_to_solana_address(params["tokenOut"]),
+                    "amount_out_min": int(params["amountOutMin"], 16),
+                    "gas_drop": int(params["gasDrop"], 16),
+                    "fee_cancel": int(params["feeCancel"], 16),
+                    "fee_refund": int(params["feeRefund"], 16),
+                    "deadline": int(params["deadline"], 16),
+                    "addr_ref": convert_32_byte_array_to_solana_address(params["addrRef"]),
+                    "fee_rate_ref": params["feeRateRef"],
+                    "fee_rate_mayan": params["feeRateMayan"],
+                    "auction_mode": params["auctionMode"],
+                    "key_rnd": bytes(params["keyRnd"]).hex(),
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e

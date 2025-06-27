@@ -22,7 +22,7 @@ BLOCKCHAIN_IDS = {
     },
     "10": {
         "name": "optimism",
-        "native_token": "OP",
+        "native_token": "WETH",
         "native_token_contract": "0x4200000000000000000000000000000000000006",
     },
     "42161": {
