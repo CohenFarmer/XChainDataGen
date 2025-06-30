@@ -679,6 +679,117 @@ class MayanRegisterOrder(Base):
         )
 
 
+class MayanAuctionBid(Base):
+    __tablename__ = "mayan_auction_bid"
+
+    signature = Column(String(88), primary_key=True, nullable=False)
+    config = Column(String(128), nullable=False)
+    driver = Column(String(44), nullable=False)
+    auction_state = Column(String(44), nullable=False)
+    system_program = Column(String(44), nullable=False)
+    trader = Column(String(128), nullable=False)
+    chain_source = Column(String(10), nullable=False)
+    token_in = Column(String(128), nullable=False)
+    addr_dest = Column(String(128), nullable=False)
+    chain_dest = Column(String(10), nullable=False)
+    token_out = Column(String(128), nullable=False)
+    amount_out_min = Column(Numeric(30, 0), nullable=False)
+    gas_drop = Column(Numeric(30, 0), nullable=False)
+    fee_cancel = Column(Numeric(30, 0), nullable=False)
+    fee_refund = Column(Numeric(30, 0), nullable=False)
+    deadline = Column(BigInteger, nullable=False)
+    addr_ref = Column(String(128), nullable=False)
+    fee_rate_ref = Column(Integer, nullable=False)
+    fee_rate_mayan = Column(Integer, nullable=False)
+    auction_mode = Column(Integer, nullable=False)
+    key_rnd = Column(String(128), nullable=False)
+    amount_bid = Column(Numeric(30, 0), nullable=False)
+    order_hash = Column(String(64), primary_key=True, nullable=False)
+
+    def __init__(
+        self,
+        signature,
+        config,
+        driver,
+        auction_state,
+        system_program,
+        trader,
+        chain_source,
+        token_in,
+        addr_dest,
+        chain_dest,
+        token_out,
+        amount_out_min,
+        gas_drop,
+        fee_cancel,
+        fee_refund,
+        deadline,
+        addr_ref,
+        fee_rate_ref,
+        fee_rate_mayan,
+        auction_mode,
+        key_rnd,
+        amount_bid,
+        order_hash,
+    ):
+        self.config = config
+        self.signature = signature
+        self.driver = driver
+        self.auction_state = auction_state
+        self.system_program = system_program
+        self.trader = trader
+        self.chain_source = chain_source
+        self.token_in = token_in
+        self.addr_dest = addr_dest
+        self.chain_dest = chain_dest
+        self.token_out = token_out
+        self.amount_out_min = amount_out_min
+        self.gas_drop = gas_drop
+        self.fee_cancel = fee_cancel
+        self.fee_refund = fee_refund
+        self.deadline = deadline
+        self.addr_ref = addr_ref
+        self.fee_rate_ref = fee_rate_ref
+        self.fee_rate_mayan = fee_rate_mayan
+        self.auction_mode = auction_mode
+        self.key_rnd = key_rnd
+        self.amount_bid = amount_bid
+        self.order_hash = order_hash
+
+    def __repr__(self):
+        return (
+            f"<MayanAuctionBid(signature={self.signature}, config={self.config}, "
+            f"driver={self.driver}, auction_state={self.auction_state}, system_program={self.system_program}, "
+            f"trader={self.trader}, chain_source={self.chain_source}, token_in={self.token_in}, "
+            f"addr_dest={self.addr_dest}, chain_dest={self.chain_dest}, "
+            f"token_out={self.token_out}, amount_out_min={self.amount_out_min}, "
+            f"gas_drop={self.gas_drop}, fee_cancel={self.fee_cancel}, "
+            f"fee_refund={self.fee_refund}, deadline={self.deadline}, "
+            f"addr_ref={self.addr_ref}, fee_rate_ref={self.fee_rate_ref}, "
+            f"fee_rate_mayan={self.fee_rate_mayan}, auction_mode={self.auction_mode}, "
+            f"key_rnd={self.key_rnd}, amount_bid={self.amount_bid}), order_hash={self.order_hash})>"
+        )
+
+
+class MayanAuctionClose(Base):
+    __tablename__ = "mayan_auction_close"
+
+    signature = Column(String(88), nullable=False)
+    auction = Column(String(44), primary_key=True, nullable=False)
+    initializer = Column(String(44), nullable=False)
+
+    def __init__(self, signature, auction, initializer):
+        self.signature = signature
+        self.auction = auction
+        self.initializer = initializer
+
+    def __repr__(self):
+        return (
+            f"<MayanAuctionClose(signature={self.signature}, auction={self.auction}, "
+            f"initializer={self.initializer})>"
+        )
+
+
 class MayanBlockchainTransaction(Base):
     __tablename__ = "mayan_blockchain_transactions"
 

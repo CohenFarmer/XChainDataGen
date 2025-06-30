@@ -3,6 +3,8 @@ from sqlalchemy import func
 from repository.base import BaseRepository
 
 from .models import (
+    MayanAuctionBid,
+    MayanAuctionClose,
     MayanBlockchainTransaction,
     MayanCrossChainTransaction,
     MayanForwarded,
@@ -146,6 +148,24 @@ class MayanRegisterOrderRepository(BaseRepository):
                 .filter(MayanRegisterOrder.order_hash == order_hash)
                 .first()
             )
+
+
+class MayanAuctionBidRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanAuctionBid, session_factory)
+
+    def event_exists(self, signature: str):
+        with self.get_session() as session:
+            return session.query(self.model).filter(MayanAuctionBid.signature == signature).first()
+
+
+class MayanAuctionCloseRepository(BaseRepository):
+    def __init__(self, session_factory):
+        super().__init__(MayanAuctionClose, session_factory)
+
+    def event_exists(self, auction: str):
+        with self.get_session() as session:
+            return session.query(self.model).filter(MayanAuctionClose.auction == auction).first()
 
 
 class MayanBlockchainTransactionRepository(BaseRepository):
