@@ -22,19 +22,19 @@ class SolanaExtractor(Extractor):
 
         super().__init__(bridge, blockchain, blockchains)
 
-        self.solana_program_id = self.handler.get_solana_bridge_program_id()
+        self.solana_program_ids = self.handler.get_solana_bridge_program_ids()
 
     def worker(self):
         """Worker function for threads to process block ranges."""
         while not self.task_queue.empty():
             try:
-                signatures = self.task_queue.get()
+                program_id, signatures = self.task_queue.get()
 
                 self.work(signatures)
             except CustomException as e:
                 request_desc = (
-                    f"Error processing request: {self.bridge}, {self.blockchain}, {signatures[0]}, "
-                    f"{signatures[-1]}, {self.solana_program_id}. Error: {e}"
+                    f"Error processing request: {self.bridge}, {self.blockchain}, {program_id}, "
+                    f"{signatures[0]}, {signatures[-1]}, {program_id}. Error: {e}"
                 )
                 log_error(self.bridge, request_desc)
             finally:
@@ -91,81 +91,96 @@ class SolanaExtractor(Extractor):
         if len(transactions) > 0:
             self.handler.handle_transactions(transactions)
 
-    def extract_data(self, start_signature: int, end_signature: int):
+    def extract_data(self, signature_ranges: dict):
         """Main extraction logic."""
 
-        all_signatures = self.rpc_client.get_all_signatures_for_address(
-            self.solana_program_id, start_signature, end_signature
-        )
+        for idx, program_id in enumerate(self.solana_program_ids):
+            start_signature = signature_ranges[program_id]["start_signature"]
+            end_signature = signature_ranges[program_id]["end_signature"]
 
-        # if we already have signatures fetched, we can skip fetching them again
-        # with open("fetched_signatures.json", "r") as f:
-        #     all_signatures = json.load(f)
-
-        all_signatures = list(map(lambda x: x["signature"], all_signatures))
-
-        if not all_signatures:
             log_to_cli(
                 build_log_message_solana(
                     start_signature,
                     end_signature,
-                    self.solana_program_id,
-                    self.blockchain,
-                    "No transaction signatures found in the specified range.",
-                ),
-                CliColor.ERROR,
+                    self.bridge,
+                    (
+                        f"Retrieving all signatures for program {program_id} ",
+                        f"({idx + 1}/{len(self.solana_program_ids)}).",
+                    ),
+                )
             )
-            return None
 
-        start_time = time.time()
-
-        # num_threads = self.rpc_client.max_threads_per_blockchain(self.blockchain) * 2
-
-        num_threads = 15
-
-        # Ensure at least 1 per chunk, capped at 1000
-        chunk_size = max(1, min((len(all_signatures) + num_threads - 1) // num_threads, 1000))
-
-        block_ranges = self.divide_range(0, len(all_signatures) - 1, chunk_size)
-
-        # Populate the task queue
-        for start, end in block_ranges:
-            self.task_queue.put(all_signatures[start:end])
-
-        # Create and start threads
-        log_to_cli(
-            build_log_message_solana(
-                start_signature,
-                end_signature,
-                self.bridge,
-                (
-                    f"Launching {num_threads} threads to process {len(block_ranges)} signatures "
-                    f"ranges...",
-                ),
+            all_signatures = self.rpc_client.get_all_signatures_for_address(
+                program_id, start_signature, end_signature
             )
-        )
 
-        for i in range(num_threads):
-            thread = threading.Thread(target=self.worker, name=f"thread_id_{i}")
-            thread.start()
-            self.threads.append(thread)
+            # if we already have signatures fetched, we can skip fetching them again
+            # with open("fetched_signatures.json", "r") as f:
+            #     all_signatures = json.load(f)
 
-        # Wait for all threads to complete
-        self.task_queue.join()
-        for thread in self.threads:
-            thread.join()
+            all_signatures = list(map(lambda x: x["signature"], all_signatures))
 
-        end_time = time.time()
+            if not all_signatures:
+                log_to_cli(
+                    build_log_message_solana(
+                        start_signature,
+                        end_signature,
+                        program_id,
+                        self.blockchain,
+                        "No transaction signatures found in the specified range.",
+                    ),
+                    CliColor.ERROR,
+                )
+                return None
 
-        log_to_cli(
-            build_log_message_solana(
-                start_signature,
-                end_signature,
-                self.bridge,
-                (
-                    f"Finished processing logs and transactions. Time taken: "
-                    f"{end_time - start_time} seconds.",
+            start_time = time.time()
+
+            # num_threads = self.rpc_client.max_threads_per_blockchain(self.blockchain) * 2
+
+            num_threads = 15
+
+            # Ensure at least 1 per chunk, capped at 1000
+            chunk_size = max(1, min((len(all_signatures) + num_threads - 1) // num_threads, 1000))
+
+            block_ranges = self.divide_range(0, len(all_signatures) - 1, chunk_size)
+
+            # Populate the task queue
+            for start, end in block_ranges:
+                self.task_queue.put((program_id, all_signatures[start:end]))
+
+            log_to_cli(
+                build_log_message_solana(
+                    start_signature,
+                    end_signature,
+                    self.bridge,
+                    (
+                        f"Launching {num_threads} threads to process {len(block_ranges)} signature "
+                        f"ranges...",
+                    ),
+                )
+            )
+
+            for i in range(num_threads):
+                thread = threading.Thread(target=self.worker, name=f"thread_id_{i}")
+                thread.start()
+                self.threads.append(thread)
+
+            # Wait for all threads to complete
+            self.task_queue.join()
+            for thread in self.threads:
+                thread.join()
+
+            end_time = time.time()
+
+            log_to_cli(
+                build_log_message_solana(
+                    start_signature,
+                    end_signature,
+                    self.bridge,
+                    (
+                        f"Finished processing logs and transactions. Time taken: "
+                        f"{end_time - start_time} seconds.",
+                    ),
                 ),
-            ),
-            CliColor.SUCCESS,
-        )
+                CliColor.SUCCESS,
+            )

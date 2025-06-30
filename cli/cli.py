@@ -10,7 +10,6 @@ from utils.utils import (
     CliColor,
     CustomException,
     build_log_message_2,
-    build_log_message_solana,
     get_block_by_timestamp,
     get_enum_instance,
     load_module,
@@ -32,12 +31,19 @@ class Cli:
             generate_rpc_configs(blockchain)
 
             if blockchain == "solana":
+                solana_ranges = {}
+                for item in args.solana_range:
+                    program, start_sig, end_sig = item.split(":")
+                    solana_ranges[program] = {
+                        "start_signature": start_sig,
+                        "end_signature": end_sig,
+                    }
+
                 Cli.extract_solana_data(
                     idx,
                     bridge,
                     blockchain,
-                    args.start_signature,
-                    args.end_signature,
+                    solana_ranges,
                     blockchains,
                 )
             else:
@@ -92,34 +98,10 @@ class Cli:
             end_block,
         )
 
-    def extract_solana_data(idx, bridge, blockchain, start_signature, end_signature, blockchains):
-        log_to_cli(
-            build_log_message_solana(
-                start_signature,
-                end_signature,
-                bridge,
-                f"{idx + 1}/{len(blockchains)} Starting extraction... ",
-            )
-        )
+    def extract_solana_data(idx, bridge, blockchain, signature_ranges, blockchains):
+        extractor = SolanaExtractor(bridge, blockchain, blockchains)
 
-        try:
-            extractor = SolanaExtractor(bridge, blockchain, blockchains)
-        except Exception as e:
-            log_to_cli(
-                build_log_message_solana(
-                    start_signature,
-                    end_signature,
-                    bridge,
-                    f"{idx + 1}/{len(blockchains)} Error: {e}",
-                ),
-                CliColor.ERROR,
-            )
-            return
-
-        extractor.extract_data(
-            start_signature,
-            end_signature,
-        )
+        extractor.extract_data(signature_ranges)
 
     def generate_data(args):
         bridge = get_enum_instance(Bridge, args.bridge)
@@ -173,23 +155,24 @@ class Cli:
             "Solana-specific arguments", "Required if 'solana' is included in --blockchains"
         )
         solana_group.add_argument(
-            "--start_signature",
-            help="Start signature for Solana extraction (required if 'solana' is in --blockchains)",
-        )
-        solana_group.add_argument(
-            "--end_signature",
-            help="End signature for Solana extraction (required if 'solana' is in --blockchains)",
+            "--solana-range",
+            nargs="+",
+            help="List of solana ranges in the format program:start_signature:end_signature",
         )
 
-        # Custom validation for Solana arguments
         def validate_solana_args(args):
             if args.blockchains and "solana" in args.blockchains:
-                if not args.start_signature or not args.end_signature:
+                if not args.solana_range:
                     extract_parser.error(
-                        (
-                            "Arguments --start_signature and --end_signature are required when 'solana' is in --blockchains."  # noqa: E501
-                        )
+                        "--solana-range is required when 'solana' is in --blockchains."
                     )
+                # Validate each entry
+                for entry in args.solana_range:
+                    if entry.count(":") != 2:
+                        extract_parser.error(
+                            "Invalid --solana-range format. "
+                            "Must be program:start_signature:end_signature"
+                        )
 
         extract_parser.set_defaults(validate_solana_args=validate_solana_args)
 

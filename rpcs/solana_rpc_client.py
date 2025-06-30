@@ -32,27 +32,26 @@ class SolanaRPCClient(RPCClient):
         lastSignature = end_signature  # the endpoint works by fetching in reverse order
 
         while True:
-            log_to_cli(
-                build_log_message_solana(
-                    start_signature,
-                    end_signature,
-                    self.bridge,
-                    (
-                        f"Retrieving all signatures for {account_address}..."
-                        f"({len(all_signatures)} signatures fetched so far)",
-                    ),
-                )
-            )
-
             fetchedTransactions = self.req_get_signatures_for_address(
                 [
                     account_address,
                     {"before": lastSignature, "until": start_signature, "limit": 1000},
                 ]
             )
+
             all_signatures.extend(fetchedTransactions)
 
-            lastSignature = fetchedTransactions[len(fetchedTransactions) - 1]["signature"]
+            log_to_cli(
+                build_log_message_solana(
+                    start_signature,
+                    end_signature,
+                    self.bridge,
+                    f"Fetched {len(all_signatures)} signatures for {account_address}...",
+                ),
+                CliColor.INFO,
+            )
+
+            lastSignature = fetchedTransactions[-1]["signature"]
 
             if len(fetchedTransactions) != 1000:
                 break

@@ -18,7 +18,7 @@ class BaseHandler(ABC):
         # Map of blockchains that are involved in the analysis, used to filter events.
         self.counterPartyBlockchainsMap = {b: True for b in blockchains}
 
-    def get_solana_bridge_program_id(self) -> str:
+    def get_solana_bridge_program_ids(self) -> str:
         """
         Returns the program ID of the Solana bridge.
         This is a placeholder method and should be overridden in subclasses if needed.

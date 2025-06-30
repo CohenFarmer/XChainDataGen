@@ -126,6 +126,9 @@ class PriceGenerator:
         dst_contract_address: str = None,
     ):
         try:
+            token_symbol = None
+            token_name = None
+
             src_token_metadata = token_metadata_repo.get_token_metadata_by_contract_and_blockchain(
                 src_contract_address if src_contract_address is not None else input_token,
                 src_blockchain,
@@ -153,7 +156,7 @@ class PriceGenerator:
 
                     token_symbol = metadata["symbol"]
                     token_name = metadata["name"]
-                else:
+                elif dst_token_metadata is not None:
                     token_symbol = src_token_metadata.symbol
                     token_name = src_token_metadata.name
 
@@ -207,9 +210,24 @@ class PriceGenerator:
 
                     token_symbol = metadata["symbol"]
                     token_name = metadata["name"]
-                else:
+                elif src_token_metadata is not None:
                     token_symbol = src_token_metadata.symbol
                     token_name = src_token_metadata.name
+
+                if token_symbol is None or token_name is None:
+                    # if the token symbol or name is None, we cannot fetch the prices
+                    # for this token
+
+                    log_to_cli(
+                        build_log_message_generator(
+                            bridge,
+                            f"Token metadata for {input_token} ({src_blockchain}) or "
+                            f"{output_token} ({dst_blockchain}) is missing. "
+                            "Skipping price fetching.",
+                        ),
+                        CliColor.WARNING,
+                    )
+                    return
 
                 # check if we have already fetched the token prices for this symbol
                 completed, dates = PriceGenerator.is_token_price_complete(
@@ -308,9 +326,10 @@ class PriceGenerator:
             CliColor.INFO,
         )
 
-        if symbol and (
-            "usd" in symbol.lower() or "dai" in symbol.lower() or "frax" in symbol.lower()
-        ):
+        if symbol is None or name is None:
+            return
+
+        if "usd" in symbol.lower() or "dai" in symbol.lower() or "frax" in symbol.lower():
             rows = []
             current_ts = start_ts
             one_day = 86400  # seconds in a day

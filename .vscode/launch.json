@@ -212,7 +212,7 @@
         "type": "debugpy",
         "request": "launch",
         "program": "${workspaceFolder}/__init__.py",
-        "args": ["extract", "--bridge", "mayan", "--start_ts", "1746054000", "--end_ts", "1746226800", "--blockchains", "solana", "ethereum", "base", "avalanche", "optimism", "arbitrum", "bnb", "polygon", "linea", "--start_signature", "4AEnT1cquemxzKt3gschN8P1SWwxiEGqanfFuFnRSRx8v7bRbJxUKryCrChHpAyvW8nL3iVPuYB6A4uzUzcvjq4L", "--end_signature", "5jJRAbP7CAPQvvqpntq3mA3ygx7phegbRoU2T5cafXd4W3iNmHQ21Jmkgonuqt9TAZCoe1DEf14cb6XQ8kd3REM6"],
+        "args": ["extract", "--bridge", "mayan", "--start_ts", "1748736000", "--end_ts", "1748908799", "--blockchains", "solana", "ethereum", "base", "avalanche", "optimism", "arbitrum", "bnb", "polygon", "linea", "--solana-range", "BLZRi6frs4X4DNLw56V4EXai1b6QVESN1BhHBTYM9VcY:4AEnT1cquemxzKt3gschN8P1SWwxiEGqanfFuFnRSRx8v7bRbJxUKryCrChHpAyvW8nL3iVPuYB6A4uzUzcvjq4L:5jJRAbP7CAPQvvqpntq3mA3ygx7phegbRoU2T5cafXd4W3iNmHQ21Jmkgonuqt9TAZCoe1DEf14cb6XQ8kd3REM6", "9w1D9okTM8xNE7Ntb7LpaAaoLc6LfU9nHFs2h2KTpX1H:3wFXpiA2JuhgxQuq5BqziSehQUJEQ5t1bF8hicSmSVBTSAmTTBQR7sqbJju7MV9qdKZShwDvUqNzDgY4hUwSnMPh:29o1ARU8gDTSqjqvfXrCbQ5e84qJ5MTcaucnNMBFDBzjphNTCAaVnFBLZ9hDMQfBzt4E1rJGTjjbz1DR79G5cPDU"],
         "console": "integratedTerminal",
         "justMyCode": true,
         "python": "${workspaceFolder}/.xchaindata/bin/python",

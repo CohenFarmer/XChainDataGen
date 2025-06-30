@@ -5,12 +5,14 @@ from extractor.base_handler import BaseHandler
 from extractor.mayan.constants import (
     BLOCKCHAIN_IDS,
     BRIDGE_CONFIG,
-    SOLANA_PROGRAM_ADDRESS,
+    SOLANA_PROGRAM_ADDRESSES,
     WETH_CONTRACT_ADDRESSES,
 )
 from extractor.mayan.utils.OrderHash import reconstruct_order_hash_from_params
 from repository.database import DBSession
 from repository.mayan.repository import (
+    MayanAuctionBidRepository,
+    MayanAuctionCloseRepository,
     MayanBlockchainTransactionRepository,
     MayanForwardedRepository,
     MayanFulfillOrderRepository,
@@ -41,11 +43,11 @@ class MayanHandler(BaseHandler):
         super().__init__(rpc_client, blockchains)
         self.bridge = Bridge.MAYAN
 
-    def get_solana_bridge_program_id(self) -> str:
+    def get_solana_bridge_program_ids(self) -> str:
         """
         Returns the Solana bridge program ID for Mayan.
         """
-        return SOLANA_PROGRAM_ADDRESS
+        return SOLANA_PROGRAM_ADDRESSES
 
     def get_bridge_contracts_and_topics(self, bridge: str, blockchain: List[str]) -> None:
         return super().get_bridge_contracts_and_topics(
@@ -68,6 +70,8 @@ class MayanHandler(BaseHandler):
         self.settle_repo = MayanSettleRepository(DBSession)
         self.set_auction_winner_repo = MayanSetAuctionWinnerRepository(DBSession)
         self.register_order_repo = MayanRegisterOrderRepository(DBSession)
+        self.auction_bid_repo = MayanAuctionBidRepository(DBSession)
+        self.auction_close_repo = MayanAuctionCloseRepository(DBSession)
 
     def handle_transactions(self, transactions: List[Dict[str, Any]]) -> None:
         func_name = "handle_transactions"
@@ -448,7 +452,7 @@ class MayanHandler(BaseHandler):
             mayan_instructions = [
                 (idx, instr)
                 for idx, instr in enumerate(transaction_instructions)
-                if instr["programId"] == self.get_solana_bridge_program_id()
+                if instr["programId"] in self.get_solana_bridge_program_ids()
             ]
 
             try:
@@ -497,6 +501,16 @@ class MayanHandler(BaseHandler):
                         )
                     elif instruction["name"] == "registerOrder":
                         included = self.handle_register_order(
+                            signature,
+                            instruction,
+                        )
+                    elif instruction["name"] == "bid":
+                        included = self.handle_auction_bid(
+                            signature,
+                            instruction,
+                        )
+                    elif instruction["name"] == "closeAuction":
+                        included = self.handle_auction_close(
                             signature,
                             instruction,
                         )
@@ -665,9 +679,7 @@ class MayanHandler(BaseHandler):
 
         account_data = self.extract_accounts_from_instruction(instruction)
 
-        addr_unlocker = convert_32_byte_array_to_solana_address(
-            instruction["args"]["addrUnlocker"]["data"]
-        )
+        addr_unlocker = convert_32_byte_array_to_solana_address(instruction["args"]["addrUnlocker"])
 
         try:
             if self.fulfill_repo.event_exists(signature):
@@ -830,6 +842,126 @@ class MayanHandler(BaseHandler):
                     "fee_rate_mayan": params["feeRateMayan"],
                     "auction_mode": params["auctionMode"],
                     "key_rnd": bytes(params["keyRnd"]).hex(),
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def handle_auction_bid(self, signature: str, instruction: Dict[str, Any]):
+        func_name = "handle_auction_bid"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        params = instruction["args"]["order"]
+
+        try:
+            src_chain = self.convert_id_to_blockchain_name(
+                id=params["chainSource"],
+                blockchain_ids=BLOCKCHAIN_IDS,
+            )
+
+            dst_chain = self.convert_id_to_blockchain_name(
+                id=params["chainDest"],
+                blockchain_ids=BLOCKCHAIN_IDS,
+            )
+
+            if not src_chain or not dst_chain:
+                return None
+
+            trader = (
+                convert_32_byte_array_to_solana_address(params["trader"])
+                if src_chain == "solana"
+                else convert_32_byte_array_to_evm_address(params["trader"])
+            )
+            token_in = (
+                convert_32_byte_array_to_solana_address(params["tokenIn"])
+                if src_chain == "solana"
+                else convert_32_byte_array_to_evm_address(params["tokenIn"])
+            )
+            addr_dest = (
+                convert_32_byte_array_to_solana_address(params["addrDest"])
+                if dst_chain == "solana"
+                else convert_32_byte_array_to_evm_address(params["addrDest"])
+            )
+            token_out = (
+                convert_32_byte_array_to_solana_address(params["tokenOut"])
+                if dst_chain == "solana"
+                else convert_32_byte_array_to_evm_address(params["tokenOut"])
+            )
+            addr_ref = (
+                convert_32_byte_array_to_solana_address(params["addrRef"])
+                if dst_chain == "solana"
+                else convert_32_byte_array_to_evm_address(params["addrRef"])
+            )
+
+            order_hash = reconstruct_order_hash_from_params(
+                trader=trader,
+                token_in=token_in,
+                src_chain_id=params["chainSource"],
+                params=params,
+            )
+
+            if self.auction_bid_repo.event_exists(order_hash):
+                return None
+
+            self.auction_bid_repo.create(
+                {
+                    "order_hash": order_hash,
+                    "signature": signature,
+                    "config": account_data["config"],
+                    "driver": account_data["driver"],
+                    "auction_state": account_data["auctionState"],
+                    "system_program": account_data["systemProgram"],
+                    "trader": trader,
+                    "chain_source": src_chain,
+                    "token_in": token_in,
+                    "addr_dest": addr_dest,
+                    "chain_dest": dst_chain,
+                    "token_out": token_out,
+                    "amount_out_min": int(params["amountOutMin"], 16),
+                    "gas_drop": int(params["gasDrop"], 16),
+                    "fee_cancel": int(params["feeCancel"], 16),
+                    "fee_refund": int(params["feeRefund"], 16),
+                    "deadline": int(params["deadline"], 16),
+                    "addr_ref": addr_ref,
+                    "fee_rate_ref": params["feeRateRef"],
+                    "fee_rate_mayan": params["feeRateMayan"],
+                    "auction_mode": params["auctionMode"],
+                    "key_rnd": bytes(params["keyRnd"]).hex(),
+                    "amount_bid": int(instruction["args"]["amountBid"], 16),
+                }
+            )
+
+            return True
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def handle_auction_close(self, signature: str, instruction: Dict[str, Any]):
+        func_name = "handle_auction_close"
+
+        account_data = self.extract_accounts_from_instruction(instruction)
+
+        try:
+            if self.auction_close_repo.event_exists(account_data["auction"]):
+                return None
+
+            self.auction_close_repo.create(
+                {
+                    "signature": signature,
+                    "auction": account_data["auction"],
+                    "initializer": account_data["initializer"],
                 }
             )
 
