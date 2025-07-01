@@ -128,6 +128,8 @@ class EvmExtractor(Extractor):
 
         for pair in bridge_blockchain_pairs:
             for contract in pair["contracts"]:
+                threads = []
+
                 start_time = time.time()
                 topics = pair["topics"]
 
@@ -160,12 +162,14 @@ class EvmExtractor(Extractor):
                 for i in range(num_threads):
                     thread = threading.Thread(target=self.worker, name=f"thread_id_{i}")
                     thread.start()
-                    self.threads.append(thread)
+                    threads.append(thread)
 
                 # Wait for all threads to complete
                 self.task_queue.join()
-                for thread in self.threads:
+                for thread in threads:
                     thread.join()
+
+                threads.clear()
 
                 end_time = time.time()
 

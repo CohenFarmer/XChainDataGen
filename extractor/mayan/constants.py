@@ -25,6 +25,18 @@ BRIDGE_CONFIG = {
                     "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
                 ],
             },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
         ],
         "optimism": [
             {
@@ -42,6 +54,18 @@ BRIDGE_CONFIG = {
                 "abi": "mayan_forwarder",
                 "contracts": [
                     "0x337685fdaB40D39bd02028545a4FfA7D287cC3E2",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
                 ],
                 "topics": [
                     "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
@@ -75,6 +99,18 @@ BRIDGE_CONFIG = {
                     "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
                 ],
             },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
         ],
         "avalanche": [
             {
@@ -92,6 +128,18 @@ BRIDGE_CONFIG = {
                 "abi": "mayan_forwarder",
                 "contracts": [
                     "0x337685fdaB40D39bd02028545a4FfA7D287cC3E2",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
                 ],
                 "topics": [
                     "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
@@ -125,6 +173,18 @@ BRIDGE_CONFIG = {
                     "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
                 ],
             },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
         ],
         "bnb": [
             {
@@ -142,6 +202,18 @@ BRIDGE_CONFIG = {
                 "abi": "mayan_forwarder",
                 "contracts": [
                     "0x337685fdaB40D39bd02028545a4FfA7D287cC3E2",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
                 ],
                 "topics": [
                     "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
@@ -175,6 +247,18 @@ BRIDGE_CONFIG = {
                     "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
                 ],
             },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
         ],
         "linea": [
             {
@@ -192,6 +276,18 @@ BRIDGE_CONFIG = {
                 "abi": "mayan_forwarder",
                 "contracts": [
                     "0x337685fdaB40D39bd02028545a4FfA7D287cC3E2",  # Mayan Forwarder
+                ],
+                "topics": [
+                    "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth
+                    "0x23278f58875126c795a4072b98b5851fe9b21cea19895b02a6224fefbb1e3298",  # SwapAndForwardedERC20
+                    "0xb8543d214cab9591941648db8d40126a163bfd0db4a865678320b921e1398043",  # ForwardedEth
+                    "0xbf150db6b4a14b084f7346b4bc300f552ce867afe55be27bce2d6b37e3307cda",  # ForwardedERC20
+                ],
+            },
+            {
+                "abi": "mayan_forwarder",
+                "contracts": [
+                    "0x0654874eb7F59C6f5b39931FC45dC45337c967c3",  # Mayan Forwarder
                 ],
                 "topics": [
                     "0x7cbff921ae1f3ea71284120d2aabde13587df067f2bb5c831ea6e35d7a9242ac",  # SwapAndForwardedEth

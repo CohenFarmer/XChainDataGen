@@ -18,7 +18,6 @@ from .models import (
     MayanSettle,
     MayanSwapAndForwarded,
     MayanUnlock,
-    MayanUnlockBatch,
 )
 
 
@@ -82,15 +81,6 @@ class MayanInitOrderRepository(BaseRepository):
     def event_exists(self, order_hash: str):
         with self.get_session() as session:
             return session.query(self.model).filter(self.model.order_hash == order_hash).first()
-
-
-class MayanUnlockBatchRepository(BaseRepository):
-    def __init__(self, session_factory):
-        super().__init__(MayanUnlockBatch, session_factory)
-
-    def event_exists(self, batch_id: str):
-        with self.get_session() as session:
-            return session.query(self.model).filter(MayanUnlockBatch.batch_id == batch_id).first()
 
 
 class MayanUnlockRepository(BaseRepository):
@@ -194,7 +184,7 @@ class MayanCrossChainTransactionRepository(BaseRepository):
 
     def get_number_of_records(self):
         with self.get_session() as session:
-            return session.query(func.count(MayanCrossChainTransaction.id)).scalar()
+            return session.query(func.count(MayanCrossChainTransaction.intent_id)).scalar()
 
     def empty_table(self):
         with self.get_session() as session:
@@ -204,7 +194,7 @@ class MayanCrossChainTransactionRepository(BaseRepository):
         with self.get_session() as session:
             session.query(MayanCrossChainTransaction).filter(
                 MayanCrossChainTransaction.src_transaction_hash == transaction_hash
-            ).update({"amount_usd": amount_usd})
+            ).update({"output_amount_usd": amount_usd})
 
     def get_by_src_tx_hash(self, src_tx_hash: str):
         with self.get_session() as session:
@@ -234,4 +224,4 @@ class MayanCrossChainTransactionRepository(BaseRepository):
 
     def get_total_amount_usd_transacted(self):
         with self.get_session() as session:
-            return session.query(func.sum(MayanCrossChainTransaction.amount_usd)).scalar()
+            return session.query(func.sum(MayanCrossChainTransaction.input_amount_usd)).scalar()
