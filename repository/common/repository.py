@@ -85,6 +85,17 @@ class TokenMetadataRepository(BaseRepository):
         with self.get_session() as session:
             return session.query(TokenMetadata).filter(TokenMetadata.symbol == symbol).first()
 
+    def get_token_metadata_by_symbol_and_blockchain(self, symbol: str, blockchain: str):
+        with self.get_session() as session:
+            return (
+                session.query(TokenMetadata)
+                .filter(
+                    TokenMetadata.symbol == symbol,
+                    TokenMetadata.blockchain == blockchain,
+                )
+                .first()
+            )
+
 
 class NativeTokenRepository(BaseRepository):
     def __init__(self, session_factory):

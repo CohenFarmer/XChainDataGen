@@ -260,7 +260,7 @@ class MayanHandler(BaseHandler):
     def handle_forwarded_eth(self, blockchain, event):
         func_name = "handle_forwarded_eth"
 
-        event["token"] = self.populate_weth_token(blockchain)
+        event["token"] = "0x0000000000000000000000000000000000000000"
 
         try:
             return self.handle_forwarded(blockchain, event)
@@ -287,7 +287,7 @@ class MayanHandler(BaseHandler):
         func_name = "handle_forwarded"
 
         try:
-            if self.swap_and_forwarded_repo.event_exists(event["transaction_hash"]):
+            if self.forwarded_repo.event_exists(event["transaction_hash"]):
                 return None
 
             # Only interested in events from the Mayan Swift protocol (other alternatives

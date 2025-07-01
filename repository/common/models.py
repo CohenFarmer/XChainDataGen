@@ -30,7 +30,7 @@ class TokenMetadata(Base):
     name = Column(String(50), nullable=False)
     decimals = Column(Integer, nullable=False)
     blockchain = Column(String(10), nullable=False)
-    address = Column(String(42), nullable=True)
+    address = Column(String(44), nullable=True)
 
     def __init__(self, symbol, name, decimals, blockchain, address):
         self.symbol = symbol

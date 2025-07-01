@@ -832,28 +832,39 @@ class MayanBlockchainTransaction(Base):
 class MayanCrossChainTransaction(Base):
     __tablename__ = "mayan_cross_chain_transactions"
 
-    id = Column(BigInteger, nullable=False, autoincrement=True, primary_key=True)
     src_blockchain = Column(String(10), nullable=False)
-    src_transaction_hash = Column(String(66), nullable=False)
-    src_from_address = Column(String(42), nullable=False)
-    src_to_address = Column(String(42), nullable=False)
+    src_transaction_hash = Column(String(88), nullable=False)
+    src_from_address = Column(String(44), nullable=False)
+    src_to_address = Column(String(44), nullable=False)
     src_fee = Column(Numeric(30, 0), nullable=False)
     src_fee_usd = Column(Float, nullable=True)
     src_timestamp = Column(BigInteger, nullable=False)
     dst_blockchain = Column(String(10), nullable=False)
-    dst_transaction_hash = Column(String(66), nullable=False)
-    dst_from_address = Column(String(42), nullable=False)
-    dst_to_address = Column(String(42), nullable=False)
+    dst_transaction_hash = Column(String(88), nullable=False)
+    dst_from_address = Column(String(44), nullable=False)
+    dst_to_address = Column(String(44), nullable=False)
     dst_fee = Column(Numeric(30, 0), nullable=False)
     dst_fee_usd = Column(Float, nullable=True)
     dst_timestamp = Column(BigInteger, nullable=False)
-    deposit_id = Column(BigInteger, nullable=False)
-    depositor = Column(String(42), nullable=False)
-    recipient = Column(String(42), nullable=False)
-    src_contract_address = Column(String(42), nullable=False)
-    dst_contract_address = Column(String(42), nullable=False)
-    amount = Column(Numeric(30, 0), nullable=False)
-    amount_usd = Column(Float, nullable=True)
+    refund_blockchain = Column(String(10), nullable=False)
+    refund_transaction_hash = Column(String(88), nullable=False)
+    refund_from_address = Column(String(44), nullable=False)
+    refund_to_address = Column(String(44), nullable=False)
+    refund_fee = Column(Numeric(30, 0), nullable=False)
+    refund_fee_usd = Column(Float, nullable=True)
+    refund_timestamp = Column(BigInteger, nullable=False)
+    intent_id = Column(String(64), nullable=False, primary_key=True)
+    depositor = Column(String(44), nullable=False)
+    recipient = Column(String(44), nullable=False)
+    src_contract_address = Column(String(44), nullable=False)
+    dst_contract_address = Column(String(44), nullable=False)
+    input_amount = Column(Numeric(30, 0), nullable=False)
+    input_amount_usd = Column(Float, nullable=True)
+    output_amount = Column(Numeric(30, 0), nullable=False)
+    output_amount_usd = Column(Float, nullable=True)
+    refund_amount = Column(Numeric(30, 0), nullable=False)
+    refund_amount_usd = Column(Float, nullable=True)
+    refund_token = Column(String(44), nullable=False)
 
     def __init__(
         self,
@@ -871,13 +882,25 @@ class MayanCrossChainTransaction(Base):
         dst_fee,
         dst_fee_usd,
         dst_timestamp,
-        deposit_id,
+        refund_blockchain,
+        refund_transaction_hash,
+        refund_from_address,
+        refund_to_address,
+        refund_fee,
+        refund_fee_usd,
+        refund_timestamp,
+        intent_id,
         depositor,
         recipient,
         src_contract_address,
         dst_contract_address,
-        amount,
-        amount_usd,
+        input_amount,
+        input_amount_usd,
+        output_amount,
+        output_amount_usd,
+        refund_amount,
+        refund_amount_usd,
+        refund_token,
     ):
         self.src_blockchain = src_blockchain
         self.src_transaction_hash = src_transaction_hash
@@ -893,10 +916,22 @@ class MayanCrossChainTransaction(Base):
         self.dst_fee = dst_fee
         self.dst_fee_usd = dst_fee_usd
         self.dst_timestamp = dst_timestamp
-        self.deposit_id = deposit_id
+        self.refund_blockchain = refund_blockchain
+        self.refund_transaction_hash = refund_transaction_hash
+        self.refund_from_address = refund_from_address
+        self.refund_to_address = refund_to_address
+        self.refund_fee = refund_fee
+        self.refund_fee_usd = refund_fee_usd
+        self.refund_timestamp = refund_timestamp
+        self.intent_id = intent_id
         self.depositor = depositor
         self.recipient = recipient
         self.src_contract_address = src_contract_address
         self.dst_contract_address = dst_contract_address
-        self.amount = amount
-        self.amount_usd = amount_usd
+        self.input_amount = input_amount
+        self.input_amount_usd = input_amount_usd
+        self.output_amount = output_amount
+        self.output_amount_usd = output_amount_usd
+        self.refund_amount = refund_amount
+        self.refund_amount_usd = refund_amount_usd
+        self.refund_token = refund_token

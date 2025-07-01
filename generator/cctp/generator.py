@@ -55,7 +55,7 @@ class CctpGenerator(BaseGenerator):
             end_ts = int(self.transactions_repo.get_max_timestamp()) + 86400
 
             # POPULATE TOKEN TABLES WITH NATIVE TOKEN INFO
-            PriceGenerator.populate_native_tokens(
+            self.price_generator.populate_native_tokens(
                 self.bridge,
                 self.native_token_repo,
                 self.token_metadata_repo,

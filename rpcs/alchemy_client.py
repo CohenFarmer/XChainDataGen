@@ -2,7 +2,12 @@ import time
 
 import requests
 
-from utils.utils import CustomException, convert_blockchain_into_alchemy_id, load_alchemy_api_key
+from utils.utils import (
+    CustomException,
+    convert_blockchain_into_alchemy_id,
+    load_alchemy_api_key,
+    log_error,
+)
 
 
 class AlchemyClient:
@@ -37,6 +42,7 @@ class AlchemyClient:
 
     @staticmethod
     def get_token_prices_by_symbol_or_address(
+        bridge: str,
         start_ts: int,
         end_ts: int,
         symbol: str = None,
@@ -100,6 +106,17 @@ class AlchemyClient:
                 # if response.text contains "token not found" return {}
                 if "Token not found" in response.text:
                     return {}
+
+                exception = CustomException(
+                    AlchemyClient.CLASS_NAME,
+                    func_name,
+                    (
+                        f"Fetching token price with payload: {payload} "
+                        f"failed with error: {response.text}",
+                    ),
+                )
+
+                log_error(bridge, exception)
 
                 if i < 4:
                     time.sleep(2**i)  # Exponential backoff
