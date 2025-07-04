@@ -6,7 +6,6 @@ from extractor.mayan.constants import (
     BLOCKCHAIN_IDS,
     BRIDGE_CONFIG,
     SOLANA_PROGRAM_ADDRESSES,
-    WETH_CONTRACT_ADDRESSES,
 )
 from extractor.mayan.utils.OrderHash import reconstruct_order_hash_from_params
 from repository.database import DBSession
@@ -24,7 +23,6 @@ from repository.mayan.repository import (
     MayanSetAuctionWinnerRepository,
     MayanSettleRepository,
     MayanSwapAndForwardedRepository,
-    MayanUnlockBatchRepository,
     MayanUnlockRepository,
 )
 from rpcs.evm_rpc_client import EvmRPCClient
@@ -64,7 +62,6 @@ class MayanHandler(BaseHandler):
         self.swap_and_forwarded_repo = MayanSwapAndForwardedRepository(DBSession)
         self.forwarded_repo = MayanForwardedRepository(DBSession)
         self.init_order_repo = MayanInitOrderRepository(DBSession)
-        self.unlock_batch_repo = MayanUnlockBatchRepository(DBSession)
         self.unlock_repo = MayanUnlockRepository(DBSession)
         self.fulfill_repo = MayanFulfillOrderRepository(DBSession)
         self.settle_repo = MayanSettleRepository(DBSession)
@@ -167,7 +164,7 @@ class MayanHandler(BaseHandler):
     def handle_swap_and_forwarded_eth(self, blockchain, event):
         func_name = "handle_swap_and_forwarded_eth"
 
-        event["tokenIn"] = self.populate_weth_token(blockchain)
+        event["tokenIn"] = self.populate_weth_token()
 
         try:
             return self.handle_swap_and_forwarded(blockchain, event)
@@ -260,7 +257,7 @@ class MayanHandler(BaseHandler):
     def handle_forwarded_eth(self, blockchain, event):
         func_name = "handle_forwarded_eth"
 
-        event["token"] = self.populate_weth_token(blockchain)
+        event["token"] = self.populate_weth_token()
 
         try:
             return self.handle_forwarded(blockchain, event)
@@ -287,7 +284,7 @@ class MayanHandler(BaseHandler):
         func_name = "handle_forwarded"
 
         try:
-            if self.swap_and_forwarded_repo.event_exists(event["transaction_hash"]):
+            if self.forwarded_repo.event_exists(event["transaction_hash"]):
                 return None
 
             # Only interested in events from the Mayan Swift protocol (other alternatives
@@ -415,17 +412,8 @@ class MayanHandler(BaseHandler):
                 f"{blockchain} -- Tx Hash: {event['transaction_hash']}. Error writing to DB: {e}",
             ) from e
 
-    def populate_weth_token(self, blockchain: str) -> str:
-        """
-        Populates the WETH token address based on the blockchain.
-
-        Args:
-            blockchain: The blockchain to populate the WETH token for.
-
-        Returns:
-            The WETH token address.
-        """
-        return WETH_CONTRACT_ADDRESSES[blockchain]["contract_address"]
+    def populate_weth_token(self) -> str:
+        return "0x0000000000000000000000000000000000000000"
 
     ### LOGIC FOR SOLANA ###
 

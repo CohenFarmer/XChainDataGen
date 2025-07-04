@@ -59,7 +59,9 @@ class BaseRepository:
             raise ValueError("Model is not defined for this repository.")
 
         with self.get_session() as session:
-            objs = [self.model(**data) for data in objs_data]
+            objs = [
+                data if isinstance(data, self.model) else self.model(**data) for data in objs_data
+            ]
             session.add_all(objs)
             session.flush()
             return objs

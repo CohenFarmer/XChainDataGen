@@ -15,3 +15,7 @@ class BaseGenerator(ABC):
     @abstractmethod
     def generate_cross_chain_data(self) -> None:
         pass
+
+    @abstractmethod
+    def populate_token_info_tables(self, cctxs, start_ts, end_ts) -> None:
+        pass

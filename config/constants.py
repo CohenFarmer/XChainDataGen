@@ -69,6 +69,10 @@ BLOCKCHAIN_IDS = {
         "name": "ronin",
         "native_token": "AXS",
     },
+    "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d": { # genesis hash for Solana
+        "name": "solana",
+        "native_token": "SOL",
+    },
 }
 
 # the list of blockchains supported by Alchemy to retrieve token
