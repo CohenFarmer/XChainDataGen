@@ -74,6 +74,14 @@ class BaseRepository:
         with self.get_session() as session:
             session.execute(query)
 
+    def has_records(self) -> bool:
+        """
+        Check if the table has any records.
+        Returns True if records exist, False otherwise.
+        """
+        with self.get_session() as session:
+            return session.query(self.model).count() > 0
+
 
 class CrossChainRepository(BaseRepository):
     @abstractmethod

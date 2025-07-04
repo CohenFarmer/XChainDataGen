@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 from sqlalchemy import BigInteger, Boolean, Column, Float, Integer, Numeric, String
 
+from repository.common.models import BlockchainTransaction
 from repository.database import Base
 
 
@@ -216,13 +217,26 @@ class MayanOrderFulfilled(Base):
     net_amount = Column(Numeric(30, 0), nullable=False)
     blockchain = Column(String(10), nullable=False)
     transaction_hash = Column(String(66), nullable=False)
+    middle_dst_token = Column(String(44), nullable=True)
+    middle_dst_amount = Column(Numeric(30, 0), nullable=True)
 
-    def __init__(self, key, blockchain, transaction_hash, sequence, net_amount):
+    def __init__(
+        self,
+        key,
+        blockchain,
+        transaction_hash,
+        sequence,
+        net_amount,
+        middle_dst_token,
+        middle_dst_amount,
+    ):
         self.key = key
         self.blockchain = blockchain
         self.transaction_hash = transaction_hash
         self.sequence = sequence
         self.net_amount = net_amount
+        self.middle_dst_token = middle_dst_token
+        self.middle_dst_amount = middle_dst_amount
 
     def __repr__(self):
         return (
@@ -230,7 +244,9 @@ class MayanOrderFulfilled(Base):
             f"blockchain={self.blockchain}, "
             f"transaction_hash={self.transaction_hash}, "
             f"sequence={self.sequence}, "
-            f"net_amount={self.net_amount})>"
+            f"net_amount={self.net_amount}, "
+            f"middle_dst_token={self.middle_dst_token}, "
+            f"middle_dst_amount={self.middle_dst_amount}>)"
         )
 
 
@@ -267,12 +283,12 @@ class MayanInitOrder(Base):
     state = Column(String(44), nullable=False)
     state_from_acc = Column(String(44), nullable=False)
     relayer_fee_acc = Column(String(44), nullable=False)
-    mint_from = Column(String(44), nullable=False)
+    middle_src_token = Column(String(44), nullable=True)
     fee_manager_program = Column(String(44), nullable=False)
     token_program = Column(String(44), nullable=False)
     system_program = Column(String(44), nullable=False)
-    amount_in_min = Column(Numeric(30, 0), nullable=False)
-    amount_in = Column(Numeric(30, 0), nullable=False)
+    middle_src_amount_min = Column(Numeric(30, 0), nullable=True)
+    middle_src_amount = Column(Numeric(30, 0), nullable=True)
     native_input = Column(Boolean, nullable=False)
     fee_submit = Column(Numeric(30, 0), nullable=False)
     addr_dest = Column(String(128), nullable=False)
@@ -288,6 +304,9 @@ class MayanInitOrder(Base):
     fee_rate_mayan = Column(Integer, nullable=False)
     auction_mode = Column(Integer, nullable=False)
     key_rnd = Column(String(128), nullable=False)
+    original_src_token = Column(String(44), nullable=False)
+    original_src_amount = Column(Numeric(30, 0), nullable=False)
+    amm = Column(String(44), nullable=True)
 
     def __init__(
         self,
@@ -298,12 +317,12 @@ class MayanInitOrder(Base):
         state,
         state_from_acc,
         relayer_fee_acc,
-        mint_from,
+        middle_src_token,
         fee_manager_program,
         token_program,
         system_program,
-        amount_in_min,
-        amount_in,
+        middle_src_amount_min,
+        middle_src_amount,
         native_input,
         fee_submit,
         addr_dest,
@@ -319,6 +338,9 @@ class MayanInitOrder(Base):
         fee_rate_mayan,
         auction_mode,
         key_rnd,
+        original_src_token,
+        original_src_amount,
+        amm,
     ):
         self.trader = trader
         self.order_hash = order_hash
@@ -327,12 +349,12 @@ class MayanInitOrder(Base):
         self.state = state
         self.state_from_acc = state_from_acc
         self.relayer_fee_acc = relayer_fee_acc
-        self.mint_from = mint_from
+        self.middle_src_token = middle_src_token
         self.fee_manager_program = fee_manager_program
         self.token_program = token_program
         self.system_program = system_program
-        self.amount_in_min = amount_in_min
-        self.amount_in = amount_in
+        self.middle_src_amount_min = middle_src_amount_min
+        self.middle_src_amount = middle_src_amount
         self.native_input = native_input
         self.fee_submit = fee_submit
         self.addr_dest = addr_dest
@@ -348,21 +370,26 @@ class MayanInitOrder(Base):
         self.fee_rate_mayan = fee_rate_mayan
         self.auction_mode = auction_mode
         self.key_rnd = key_rnd
+        self.original_src_token = original_src_token
+        self.original_src_amount = original_src_amount
+        self.amm = amm
 
     def __repr__(self):
         return (
             f"<MayanInitOrder(trader={self.trader}, relayer={self.relayer}, state={self.state}, "
             f"state_from_acc={self.state_from_acc}, relayer_fee_acc={self.relayer_fee_acc}, "
-            f"mint_from={self.mint_from}, fee_manager_program={self.fee_manager_program}, "
+            f"mint_from={self.middle_src_token}, fee_manager_program={self.fee_manager_program}, "
             f"token_program={self.token_program}, system_program={self.system_program}, "
-            f"amount_in_min={self.amount_in_min}, amount_in={self.amount_in}, "
+            f"middle_src_amount_min={self.middle_src_amount_min}, middle_src_amount={self.middle_src_amount}, "
             f"native_input={self.native_input}, fee_submit={self.fee_submit}, "
             f"addr_dest={self.addr_dest}, chain_dest={self.chain_dest}, "
             f"token_out={self.token_out}, amount_out_min={self.amount_out_min}, gas_drop={self.gas_drop}, "
             f"fee_cancel={self.fee_cancel}, fee_refund={self.fee_refund}, deadline={self.deadline}, "
             f"addr_ref={self.addr_ref}, fee_rate_ref={self.fee_rate_ref}, "
             f"fee_rate_mayan={self.fee_rate_mayan}, auction_mode={self.auction_mode}, "
-            f"key_rnd={self.key_rnd}, order_hash={self.order_hash})>"
+            f"key_rnd={self.key_rnd}, order_hash={self.order_hash}, "
+            f"signature={self.signature}, original_src_token={self.original_src_token}, "
+            f"original_src_amount={self.original_src_amount}, amm={self.amm}>)"
         )
 
 
@@ -427,6 +454,9 @@ class MayanFulfillOrder(Base):
     system_program = Column(String(44), nullable=False)
     addr_unlocker = Column(String(64), nullable=True)
     amount = Column(Numeric(30, 0), nullable=False)
+    middle_dst_token = Column(String(44), nullable=True)
+    middle_dst_amount = Column(Numeric(30, 0), nullable=True)
+    amm = Column(String(44), nullable=True)
 
     def __init__(
         self,
@@ -439,6 +469,9 @@ class MayanFulfillOrder(Base):
         system_program,
         addr_unlocker,
         amount,
+        middle_dst_token,
+        middle_dst_amount,
+        amm,
     ):
         self.signature = signature
         self.state = state
@@ -449,13 +482,17 @@ class MayanFulfillOrder(Base):
         self.system_program = system_program
         self.addr_unlocker = addr_unlocker
         self.amount = amount
+        self.middle_dst_token = middle_dst_token
+        self.middle_dst_amount = middle_dst_amount
+        self.amm = amm
 
     def __repr__(self):
         return (
             f"<MayanFulfillOrder(signature={self.signature}, state={self.state}, driver={self.driver}, "
             f"state_to_acc={self.state_to_acc}, mint_to={self.mint_to}, dest={self.dest}, "
             f"system_program={self.system_program}, addr_unlocker={self.addr_unlocker}), "
-            f"amount={self.amount})>"
+            f"amount={self.amount}, middle_dst_token={self.middle_dst_token}, "
+            f"middle_dst_amount={self.middle_dst_amount}, amm={self.amm}>)"
         )
 
 
@@ -742,40 +779,21 @@ class MayanAuctionClose(Base):
         )
 
 
-class MayanBlockchainTransaction(Base):
+class MayanBlockchainTransaction(BlockchainTransaction):
     __tablename__ = "mayan_blockchain_transactions"
 
-    blockchain = Column(String(10), nullable=False)
-    transaction_hash = Column(String(88), nullable=False, primary_key=True)
-    block_number = Column(Integer, nullable=False)
-    timestamp = Column(BigInteger, nullable=False)
-    from_address = Column(String(42), nullable=True)
-    to_address = Column(String(42), nullable=True)
-    status = Column(Integer, nullable=False)
-    value = Column(Numeric(30, 0), nullable=True)
-    fee = Column(Numeric(30, 0), nullable=False)
-
-    def __init__(
-        self,
-        blockchain,
-        transaction_hash,
-        block_number,
-        timestamp,
-        from_address,
-        to_address,
-        status,
-        value,
-        fee,
-    ):
-        self.blockchain = blockchain
-        self.transaction_hash = transaction_hash
-        self.block_number = block_number
-        self.timestamp = timestamp
-        self.from_address = from_address
-        self.to_address = to_address
-        self.status = status
-        self.value = value
-        self.fee = fee
+    def __repr__(self):
+        return (
+            f"<MayanBlockchainTransaction(blockchain={self.blockchain}, "
+            f"transaction_hash={self.transaction_hash}, "
+            f"block_number={self.block_number}, "
+            f"timestamp={self.timestamp} "
+            f"from_address={self.from_address}, "
+            f"to_address={self.to_address}, "
+            f"value={self.value}, "
+            f"status={self.status}, "
+            f"fee={self.fee}>"
+        )
 
 
 ########## Processed Data ##########
@@ -789,6 +807,7 @@ class MayanCrossChainTransaction(Base):
     src_from_address = Column(String(44), nullable=False)
     src_to_address = Column(String(44), nullable=False)
     src_fee = Column(Numeric(30, 0), nullable=False)
+    src_value = Column(Numeric(30, 0), nullable=True)
     src_fee_usd = Column(Float, nullable=True)
     src_timestamp = Column(BigInteger, nullable=False)
     dst_blockchain = Column(String(10), nullable=False)
@@ -796,15 +815,17 @@ class MayanCrossChainTransaction(Base):
     dst_from_address = Column(String(44), nullable=False)
     dst_to_address = Column(String(44), nullable=False)
     dst_fee = Column(Numeric(30, 0), nullable=False)
+    dst_value = Column(Numeric(30, 0), nullable=True)
     dst_fee_usd = Column(Float, nullable=True)
     dst_timestamp = Column(BigInteger, nullable=False)
-    refund_blockchain = Column(String(10), nullable=False)
-    refund_transaction_hash = Column(String(88), nullable=False)
-    refund_from_address = Column(String(44), nullable=False)
-    refund_to_address = Column(String(44), nullable=False)
-    refund_fee = Column(Numeric(30, 0), nullable=False)
+    refund_blockchain = Column(String(10), nullable=True)
+    refund_transaction_hash = Column(String(88), nullable=True)
+    refund_from_address = Column(String(44), nullable=True)
+    refund_to_address = Column(String(44), nullable=True)
+    refund_fee = Column(Numeric(30, 0), nullable=True)
+    refund_value = Column(Numeric(30, 0), nullable=True)
     refund_fee_usd = Column(Float, nullable=True)
-    refund_timestamp = Column(BigInteger, nullable=False)
+    refund_timestamp = Column(BigInteger, nullable=True)
     intent_id = Column(String(64), nullable=False, primary_key=True)
     depositor = Column(String(44), nullable=False)
     recipient = Column(String(44), nullable=False)
@@ -812,11 +833,21 @@ class MayanCrossChainTransaction(Base):
     dst_contract_address = Column(String(44), nullable=False)
     input_amount = Column(Numeric(30, 0), nullable=False)
     input_amount_usd = Column(Float, nullable=True)
+    middle_src_token = Column(String(44), nullable=True)
+    middle_src_amount = Column(Numeric(30, 0), nullable=True)
+    middle_src_amount_usd = Column(Float, nullable=True)
+    middle_dst_token = Column(String(44), nullable=True)
+    middle_dst_amount = Column(Numeric(30, 0), nullable=True)
+    middle_dst_amount_usd = Column(Float, nullable=True)
     output_amount = Column(Numeric(30, 0), nullable=False)
     output_amount_usd = Column(Float, nullable=True)
-    refund_amount = Column(Numeric(30, 0), nullable=False)
+    refund_amount = Column(Numeric(30, 0), nullable=True)
     refund_amount_usd = Column(Float, nullable=True)
-    refund_token = Column(String(44), nullable=False)
+    refund_token = Column(String(44), nullable=True)
+    auction_id = Column(String(64), nullable=True)
+    auction_first_bid_timestamp = Column(BigInteger, nullable=True)
+    auction_last_bid_timestamp = Column(BigInteger, nullable=True)
+    auction_number_of_bids = Column(Integer, nullable=True)
 
     def __init__(
         self,
@@ -825,6 +856,7 @@ class MayanCrossChainTransaction(Base):
         src_from_address,
         src_to_address,
         src_fee,
+        src_value,
         src_fee_usd,
         src_timestamp,
         dst_blockchain,
@@ -832,6 +864,7 @@ class MayanCrossChainTransaction(Base):
         dst_from_address,
         dst_to_address,
         dst_fee,
+        dst_value,
         dst_fee_usd,
         dst_timestamp,
         refund_blockchain,
@@ -839,6 +872,7 @@ class MayanCrossChainTransaction(Base):
         refund_from_address,
         refund_to_address,
         refund_fee,
+        refund_value,
         refund_fee_usd,
         refund_timestamp,
         intent_id,
@@ -848,17 +882,28 @@ class MayanCrossChainTransaction(Base):
         dst_contract_address,
         input_amount,
         input_amount_usd,
+        middle_src_token,
+        middle_src_amount,
+        middle_src_amount_usd,
+        middle_dst_token,
+        middle_dst_amount,
+        middle_dst_amount_usd,
         output_amount,
         output_amount_usd,
         refund_amount,
         refund_amount_usd,
         refund_token,
+        auction_id,
+        auction_first_bid_timestamp,
+        auction_last_bid_timestamp,
+        auction_number_of_bids,
     ):
         self.src_blockchain = src_blockchain
         self.src_transaction_hash = src_transaction_hash
         self.src_from_address = src_from_address
         self.src_to_address = src_to_address
         self.src_fee = src_fee
+        self.src_value = src_value
         self.src_fee_usd = src_fee_usd
         self.src_timestamp = src_timestamp
         self.dst_blockchain = dst_blockchain
@@ -866,6 +911,7 @@ class MayanCrossChainTransaction(Base):
         self.dst_from_address = dst_from_address
         self.dst_to_address = dst_to_address
         self.dst_fee = dst_fee
+        self.dst_value = dst_value
         self.dst_fee_usd = dst_fee_usd
         self.dst_timestamp = dst_timestamp
         self.refund_blockchain = refund_blockchain
@@ -873,6 +919,7 @@ class MayanCrossChainTransaction(Base):
         self.refund_from_address = refund_from_address
         self.refund_to_address = refund_to_address
         self.refund_fee = refund_fee
+        self.refund_value = refund_value
         self.refund_fee_usd = refund_fee_usd
         self.refund_timestamp = refund_timestamp
         self.intent_id = intent_id
@@ -882,8 +929,18 @@ class MayanCrossChainTransaction(Base):
         self.dst_contract_address = dst_contract_address
         self.input_amount = input_amount
         self.input_amount_usd = input_amount_usd
+        self.middle_src_token = middle_src_token
+        self.middle_src_amount = middle_src_amount
+        self.middle_src_amount_usd = middle_src_amount_usd
+        self.middle_dst_token = middle_dst_token
+        self.middle_dst_amount = middle_dst_amount
+        self.middle_dst_amount_usd = middle_dst_amount_usd
         self.output_amount = output_amount
         self.output_amount_usd = output_amount_usd
         self.refund_amount = refund_amount
         self.refund_amount_usd = refund_amount_usd
         self.refund_token = refund_token
+        self.auction_id = auction_id
+        self.auction_first_bid_timestamp = auction_first_bid_timestamp
+        self.auction_last_bid_timestamp = auction_last_bid_timestamp
+        self.auction_number_of_bids = auction_number_of_bids

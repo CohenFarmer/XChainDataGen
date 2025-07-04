@@ -101,6 +101,9 @@ blockchains:
   - "https://mainnet.base.org"
   - "https://base-mainnet.public.blastapi.io"
   - "https://base-rpc.publicnode.com"
+  - "https://base.drpc.org"
+  - "https://base.api.onfinality.io/public"
+  - "https://base.lava.build"
 
 - name: bnb
   contract: "0xBA5Fe23f8a3a24BEd3236F05F2FcF35fd0BF0B5C"
@@ -145,13 +148,11 @@ blockchains:
   end_block: "0xAE9A3E"
   rpcs:
   - "https://scroll.drpc.org"
-  - "https://1rpc.io/scroll"
   - "https://scroll-rpc.publicnode.com"
   - "https://rpc.scroll.io"
   - "https://scroll-mainnet.public.blastapi.io"
   - "https://scroll-mainnet-public.unifra.io"
   - "https://endpoints.omniatech.io/v1/scroll/mainnet/public"
-  - "https://scroll-mainnet.chainstacklabs.com"
   - "https://rpc.ankr.com/scroll"
 
 - name: linea

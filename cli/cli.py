@@ -80,6 +80,10 @@ class Cli:
                 )
             )
             extractor = EvmExtractor(bridge, blockchain, blockchains)
+
+            if idx == len(blockchains) - 1:
+                extractor.post_processing()
+
         except Exception as e:
             log_to_cli(
                 build_log_message_2(

@@ -62,48 +62,66 @@ class BaseHandler(ABC):
         """
         pass
 
-    @abstractmethod
     def handle_transactions(self, transactions: List[Dict[str, Any]]) -> None:
-        pass
+        func_name = "handle_transactions"
+        try:
+            self.blockchain_transaction_repo.create_all(transactions)
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"Error writing transactions to database: {e}",
+            ) from e
+
+    def handle_transaction(self, transaction: Dict[str, Any]) -> None:
+        func_name = "handle_transaction"
+        try:
+            self.blockchain_transaction_repo.create(transaction)
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"Error writing transaction to database: {e}",
+            ) from e
 
     def create_transaction_object(
-        self, blockchain: str, tx_receipt: Dict[str, Any], timestamp: int
+        self, blockchain: str, tx: Dict[str, Any], timestamp: int
     ) -> None:
         func_name = "create_transaction_object"
         try:
             if blockchain == "solana":
                 return {
                     "blockchain": blockchain,
-                    "transaction_hash": tx_receipt["transaction"]["signatures"][0],
-                    "block_number": tx_receipt["slot"],
+                    "transaction_hash": tx["transaction"]["signatures"][0],
+                    "block_number": tx["slot"],
                     "timestamp": timestamp,
                     "from_address": None,
                     "to_address": None,
-                    "status": 1 if tx_receipt["meta"]["err"] is not None else 0,
+                    "status": 1 if tx["meta"]["err"] is not None else 0,
+                    "input_data": None,
                     "value": None,
-                    "fee": tx_receipt["meta"]["fee"],
+                    "fee": tx["meta"]["fee"],
                 }
             else:
                 return {
                     "blockchain": blockchain,
-                    "transaction_hash": tx_receipt["transactionHash"],
-                    "block_number": int(tx_receipt["blockNumber"], 0),
+                    "transaction_hash": tx["transactionHash"],
+                    "block_number": int(tx["blockNumber"], 0),
                     "timestamp": int(timestamp, 16),
-                    "from_address": tx_receipt["from"],
-                    "to_address": tx_receipt["to"],
-                    "status": int(tx_receipt["status"], 16),
-                    "value": int(tx_receipt["value"], 16) if "value" in tx_receipt else None,
-                    "fee": str(
-                        int(tx_receipt["gasUsed"], 0) * int(tx_receipt["effectiveGasPrice"], 0)
-                    ),
+                    "from_address": tx["from"],
+                    "to_address": tx["to"],
+                    "status": int(tx["status"], 16),
+                    "value": int(tx["value"], 16) if "value" in tx else None,
+                    "input_data": tx["input"] if "input" in tx else None,
+                    "fee": str(int(tx["gasUsed"], 0) * int(tx["effectiveGasPrice"], 0)),
                 }
         except Exception as e:
             raise CustomException(
                 self.CLASS_NAME,
                 func_name,
-                f"Tx Hash: {tx_receipt['transactionHash']}: {e}"
-                if "transactionHash" in tx_receipt
-                else f"Tx Signature: {tx_receipt['signature']}: {e}",
+                f"Tx Hash: {tx['transactionHash']}: {e}"
+                if "transactionHash" in tx
+                else f"Tx Signature: {tx['signature']}: {e}",
             ) from e
 
     @abstractmethod
@@ -141,4 +159,11 @@ class BaseHandler(ABC):
         # If the blockchain ID is not found, log an error and return None
         CustomException(self.CLASS_NAME, func_name, f"Blockchain with ID {id} not included")
         # log_to_file(e, "data/out_of_scope_blockchains.log")
+        return None
+
+    def post_processing(self) -> None:
+        """
+        Placeholder for post-processing tasks.
+        This method can be overridden in subclasses to implement specific post-processing logic.
+        """
         return None

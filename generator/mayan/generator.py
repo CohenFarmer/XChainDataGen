@@ -1,6 +1,6 @@
 import time
 
-from sqlalchemy import case, literal_column, update
+from sqlalchemy import case, func, literal, literal_column, update
 from sqlalchemy.orm import aliased
 
 from config.constants import Bridge
@@ -14,6 +14,7 @@ from repository.common.repository import (
 )
 from repository.database import DBSession
 from repository.mayan.models import (
+    MayanAuctionBid,
     MayanBlockchainTransaction,
     MayanCrossChainTransaction,
     MayanForwarded,
@@ -114,6 +115,26 @@ class MayanGenerator(BaseGenerator):
                 "src_timestamp",
                 "refund_amount_usd",
             )
+            PriceGenerator.calculate_cctx_usd_values(
+                self.bridge,
+                self.cross_chain_transactions_repo,
+                "mayan_cross_chain_transactions",
+                "middle_src_amount",
+                "src_blockchain",
+                "middle_src_token",
+                "src_timestamp",
+                "middle_src_amount_usd",
+            )
+            PriceGenerator.calculate_cctx_usd_values(
+                self.bridge,
+                self.cross_chain_transactions_repo,
+                "mayan_cross_chain_transactions",
+                "middle_dst_amount",
+                "dst_blockchain",
+                "middle_dst_token",
+                "dst_timestamp",
+                "middle_dst_amount_usd",
+            )
             PriceGenerator.calculate_cctx_native_usd_values(
                 self.bridge,
                 self.cross_chain_transactions_repo,
@@ -165,6 +186,8 @@ class MayanGenerator(BaseGenerator):
         try:
             results = []
 
+            auction_data = self.get_auction_data()
+
             SrcTx = aliased(MayanBlockchainTransaction)
             DstTx = aliased(MayanBlockchainTransaction)
             RefundTx = aliased(MayanBlockchainTransaction)
@@ -172,61 +195,110 @@ class MayanGenerator(BaseGenerator):
             with self.cross_chain_transactions_repo.get_session() as session:
                 results = (
                     session.query(
-                        MayanInitOrder,
-                        MayanOrderFulfilled,
-                        MayanUnlock,
-                        SrcTx,
-                        DstTx,
-                        RefundTx,
+                        MayanInitOrder.trader.label("src_from_address"),
+                        MayanInitOrder.trader.label("depositor"),
+                        MayanInitOrder.addr_dest.label("recipient"),
+                        MayanInitOrder.order_hash.label("order_hash"),
+                        MayanInitOrder.token_out.label("token_out"),
+                        MayanInitOrder.original_src_token.label("original_src_token"),
+                        MayanInitOrder.original_src_amount.label("original_src_amount"),
+                        MayanInitOrder.middle_src_token.label("middle_src_token"),
+                        MayanInitOrder.middle_src_amount.label("middle_src_amount"),
+                        MayanOrderFulfilled.net_amount.label("output_amount"),
+                        MayanOrderFulfilled.middle_dst_token.label("middle_dst_token"),
+                        MayanOrderFulfilled.middle_dst_amount.label("middle_dst_amount"),
+                        MayanUnlock.signature.label("refund_transaction_hash"),
+                        MayanUnlock.driver_acc.label("refund_from_address"),
+                        MayanUnlock.amount.label("refund_amount"),
+                        MayanUnlock.mint_from.label("refund_token"),
+                        SrcTx.blockchain.label("src_blockchain"),
+                        SrcTx.transaction_hash.label("src_transaction_hash"),
+                        SrcTx.fee.label("src_fee"),
+                        SrcTx.value.label("src_value"),
+                        SrcTx.timestamp.label("src_timestamp"),
+                        DstTx.transaction_hash.label("dst_transaction_hash"),
+                        DstTx.blockchain.label("dst_blockchain"),
+                        DstTx.from_address.label("dst_from_address"),
+                        DstTx.to_address.label("dst_to_address"),
+                        DstTx.fee.label("dst_fee"),
+                        DstTx.value.label("dst_value"),
+                        DstTx.timestamp.label("dst_timestamp"),
+                        RefundTx.blockchain.label("refund_blockchain"),
+                        RefundTx.fee.label("refund_fee"),
+                        RefundTx.value.label("refund_value"),
+                        RefundTx.timestamp.label("refund_timestamp"),
+                        auction_data.c.auction_id.label("auction_id"),
+                        auction_data.c.auction_first_bid_timestamp.label(
+                            "auction_first_bid_timestamp"
+                        ),
+                        auction_data.c.auction_last_bid_timestamp.label(
+                            "auction_last_bid_timestamp"
+                        ),
+                        auction_data.c.auction_number_of_bids.label("auction_number_of_bids"),
                     )
                     .join(MayanOrderFulfilled, MayanInitOrder.order_hash == MayanOrderFulfilled.key)
-                    .join(MayanUnlock, MayanInitOrder.state == MayanUnlock.state)
-                    .outerjoin(SrcTx, SrcTx.transaction_hash == MayanInitOrder.signature)
-                    .outerjoin(
-                        DstTx, DstTx.transaction_hash == MayanOrderFulfilled.transaction_hash
-                    )
+                    .join(SrcTx, SrcTx.transaction_hash == MayanInitOrder.signature)
+                    .join(DstTx, DstTx.transaction_hash == MayanOrderFulfilled.transaction_hash)
+                    .outerjoin(MayanUnlock, MayanInitOrder.state == MayanUnlock.state)
                     .outerjoin(RefundTx, RefundTx.transaction_hash == MayanUnlock.signature)
+                    .outerjoin(
+                        auction_data,
+                        auction_data.c.order_hash == MayanInitOrder.order_hash,
+                    )
                     .all()
                 )
 
             cctxs = []
 
-            for init, fulfilled, unlock, src_tx, dst_tx, refund_tx in results:
+            for row in results:
                 cctxs.append(
                     MayanCrossChainTransaction(
-                        src_blockchain="solana",
-                        src_transaction_hash=src_tx.transaction_hash,
-                        src_from_address=init.trader,
+                        src_blockchain=row.src_blockchain,
+                        src_transaction_hash=row.src_transaction_hash,
+                        src_from_address=row.src_from_address,
                         src_to_address="BLZRi6frs4X4DNLw56V4EXai1b6QVESN1BhHBTYM9VcY",
-                        src_fee=src_tx.fee,
+                        src_fee=row.src_fee,
+                        src_value=row.src_value,
                         src_fee_usd=None,
-                        src_timestamp=src_tx.timestamp,
-                        dst_blockchain=dst_tx.blockchain,
-                        dst_transaction_hash=dst_tx.transaction_hash,
-                        dst_from_address=dst_tx.from_address,
-                        dst_to_address=dst_tx.to_address,
-                        dst_fee=dst_tx.fee,
+                        src_timestamp=row.src_timestamp,
+                        dst_blockchain=row.dst_blockchain,
+                        dst_transaction_hash=row.dst_transaction_hash,
+                        dst_from_address=row.dst_from_address,
+                        dst_to_address=row.dst_to_address,
+                        dst_fee=row.dst_fee,
+                        dst_value=row.dst_value,
                         dst_fee_usd=None,
-                        dst_timestamp=dst_tx.timestamp,
-                        refund_blockchain="solana",
-                        refund_transaction_hash=unlock.signature,
-                        refund_from_address=unlock.driver_acc,
+                        dst_timestamp=row.dst_timestamp,
+                        refund_blockchain=row.refund_blockchain,
+                        refund_transaction_hash=row.refund_transaction_hash,
+                        refund_from_address=row.refund_from_address,
                         refund_to_address="9w1D9okTM8xNE7Ntb7LpaAaoLc6LfU9nHFs2h2KTpX1H",
-                        refund_fee=refund_tx.fee,
+                        refund_fee=row.refund_fee,
+                        refund_value=row.refund_value,
                         refund_fee_usd=None,
-                        refund_timestamp=refund_tx.timestamp,
-                        intent_id=init.order_hash,
-                        depositor=init.trader,
-                        recipient=init.addr_dest,
-                        src_contract_address=init.mint_from,
-                        dst_contract_address=init.token_out,
-                        input_amount=init.amount_in,
+                        refund_timestamp=row.refund_timestamp,
+                        intent_id=row.order_hash,
+                        depositor=row.depositor,
+                        recipient=row.recipient,
+                        src_contract_address=row.original_src_token,
+                        dst_contract_address=row.token_out,
+                        input_amount=row.original_src_amount,
                         input_amount_usd=None,
-                        output_amount=fulfilled.net_amount,
+                        middle_src_token=row.middle_src_token,
+                        middle_src_amount=row.middle_src_amount,
+                        middle_src_amount_usd=None,
+                        middle_dst_token=row.middle_dst_token,
+                        middle_dst_amount=row.middle_dst_amount,
+                        middle_dst_amount_usd=None,
+                        output_amount=row.output_amount,
                         output_amount_usd=None,
-                        refund_amount=unlock.amount,
+                        refund_amount=row.refund_amount,
                         refund_amount_usd=None,
-                        refund_token=unlock.mint_from,
+                        refund_token=row.refund_token,
+                        auction_id=row.auction_id,
+                        auction_first_bid_timestamp=row.auction_first_bid_timestamp,
+                        auction_last_bid_timestamp=row.auction_last_bid_timestamp,
+                        auction_number_of_bids=row.auction_number_of_bids,
                     )
                 )
 
@@ -263,6 +335,8 @@ class MayanGenerator(BaseGenerator):
         try:
             results = []
 
+            auction_data = self.get_auction_data()
+
             SrcTx = aliased(MayanBlockchainTransaction)
             DstTx = aliased(MayanBlockchainTransaction)
             RefundTx = aliased(MayanBlockchainTransaction)
@@ -277,6 +351,8 @@ class MayanGenerator(BaseGenerator):
                     MayanForwarded.token_out.label("token_out"),
                     MayanForwarded.dst_addr.label("dst_addr"),
                     MayanForwarded.amount.label("amount"),
+                    literal(None).label("middle_src_token"),
+                    literal(None).label("middle_src_amount"),
                     literal_column("'forwarded'").label("entry_type"),
                 )
 
@@ -290,6 +366,8 @@ class MayanGenerator(BaseGenerator):
                     MayanSwapAndForwarded.token_out.label("token_out"),
                     MayanSwapAndForwarded.dst_addr.label("dst_addr"),
                     MayanSwapAndForwarded.amount_in.label("amount"),
+                    MayanSwapAndForwarded.middle_token.label("middle_src_token"),
+                    MayanSwapAndForwarded.middle_amount.label("middle_src_amount"),
                     literal_column("'swap_and_forwarded'").label("entry_type"),
                 )
 
@@ -304,17 +382,22 @@ class MayanGenerator(BaseGenerator):
                         Fwd.c.trader.label("src_from_address"),
                         Fwd.c.mayan_protocol.label("src_to_address"),
                         SrcTx.fee.label("src_fee"),
+                        SrcTx.value.label("src_value"),
                         SrcTx.timestamp.label("src_timestamp"),
                         MayanFulfillOrder.signature.label("dst_transaction_hash"),
                         MayanFulfillOrder.driver.label("dst_from_address"),
                         MayanFulfillOrder.dest.label("dst_to_address"),
+                        MayanFulfillOrder.middle_dst_token.label("middle_dst_token"),
+                        MayanFulfillOrder.middle_dst_amount.label("middle_dst_amount"),
                         DstTx.fee.label("dst_fee"),
+                        DstTx.value.label("dst_value"),
                         DstTx.timestamp.label("dst_timestamp"),
                         RefundTx.blockchain.label("refund_blockchain"),
                         RefundTx.transaction_hash.label("refund_transaction_hash"),
                         RefundTx.from_address.label("refund_from_address"),
                         RefundTx.to_address.label("refund_to_address"),
                         RefundTx.fee.label("refund_fee"),
+                        RefundTx.value.label("refund_value"),
                         RefundTx.timestamp.label("refund_timestamp"),
                         MayanOrderCreated.key.label("intent_id"),
                         Fwd.c.trader.label("depositor"),
@@ -326,6 +409,16 @@ class MayanGenerator(BaseGenerator):
                             else_=SrcTx.value,
                         ).label("input_amount"),
                         MayanFulfillOrder.amount.label("output_amount"),
+                        auction_data.c.auction_id.label("auction_id"),
+                        auction_data.c.auction_first_bid_timestamp.label(
+                            "auction_first_bid_timestamp"
+                        ),
+                        auction_data.c.auction_last_bid_timestamp.label(
+                            "auction_last_bid_timestamp"
+                        ),
+                        auction_data.c.auction_number_of_bids.label("auction_number_of_bids"),
+                        Fwd.c.middle_src_token.label("middle_src_token"),
+                        Fwd.c.middle_src_amount.label("middle_src_amount"),
                     )
                     .join(
                         MayanOrderCreated,
@@ -335,11 +428,15 @@ class MayanGenerator(BaseGenerator):
                         MayanRegisterOrder, MayanRegisterOrder.order_hash == MayanOrderCreated.key
                     )
                     .join(MayanFulfillOrder, MayanFulfillOrder.state == MayanRegisterOrder.state)
-                    .join(MayanOrderUnlocked, MayanOrderUnlocked.key == MayanOrderCreated.key)
                     .join(SrcTx, SrcTx.transaction_hash == Fwd.c.transaction_hash)
                     .join(DstTx, DstTx.transaction_hash == MayanFulfillOrder.signature)
-                    .join(
+                    .outerjoin(MayanOrderUnlocked, MayanOrderUnlocked.key == MayanOrderCreated.key)
+                    .outerjoin(
                         RefundTx, RefundTx.transaction_hash == MayanOrderUnlocked.transaction_hash
+                    )
+                    .outerjoin(
+                        auction_data,
+                        auction_data.c.order_hash == MayanRegisterOrder.order_hash,
                     )
                 )
 
@@ -353,6 +450,7 @@ class MayanGenerator(BaseGenerator):
                         src_from_address=row.src_from_address,
                         src_to_address=row.src_to_address,
                         src_fee=row.src_fee,
+                        src_value=row.src_value,
                         src_fee_usd=None,
                         src_timestamp=row.src_timestamp,
                         dst_blockchain="solana",
@@ -360,6 +458,7 @@ class MayanGenerator(BaseGenerator):
                         dst_from_address=row.dst_from_address,
                         dst_to_address=row.dst_to_address,
                         dst_fee=row.dst_fee,
+                        dst_value=row.dst_value,
                         dst_fee_usd=None,
                         dst_timestamp=row.dst_timestamp,
                         refund_blockchain=row.refund_blockchain,
@@ -367,6 +466,7 @@ class MayanGenerator(BaseGenerator):
                         refund_from_address=row.refund_from_address,
                         refund_to_address=row.refund_to_address,
                         refund_fee=row.refund_fee,
+                        refund_value=row.refund_value,
                         refund_fee_usd=None,
                         refund_timestamp=row.refund_timestamp,
                         intent_id=row.intent_id,
@@ -376,6 +476,12 @@ class MayanGenerator(BaseGenerator):
                         dst_contract_address=row.dst_contract_address,
                         input_amount=row.input_amount,
                         input_amount_usd=None,
+                        middle_src_token=row.middle_src_token,
+                        middle_src_amount=row.middle_src_amount,
+                        middle_src_amount_usd=None,
+                        middle_dst_token=row.middle_dst_token,
+                        middle_dst_amount=row.middle_dst_amount,
+                        middle_dst_amount_usd=None,
                         output_amount=row.output_amount,
                         output_amount_usd=None,
                         refund_amount=row.input_amount,  # in the case of usage of intermediary
@@ -384,6 +490,10 @@ class MayanGenerator(BaseGenerator):
                         # parse internal transactions and match to the unlock events.
                         refund_amount_usd=None,
                         refund_token="0x0000000000000000000000000000000000000000",
+                        auction_id=row.auction_id,
+                        auction_first_bid_timestamp=row.auction_first_bid_timestamp,
+                        auction_last_bid_timestamp=row.auction_last_bid_timestamp,
+                        auction_number_of_bids=row.auction_number_of_bids,
                     )
                 )
 
@@ -420,6 +530,8 @@ class MayanGenerator(BaseGenerator):
         try:
             results = []
 
+            auction_data = self.get_auction_data()
+
             SrcTx = aliased(MayanBlockchainTransaction)
             DstTx = aliased(MayanBlockchainTransaction)
             RefundTx = aliased(MayanBlockchainTransaction)
@@ -434,6 +546,8 @@ class MayanGenerator(BaseGenerator):
                     MayanForwarded.token_out.label("token_out"),
                     MayanForwarded.dst_addr.label("dst_addr"),
                     MayanForwarded.amount.label("amount"),
+                    literal(None).label("middle_src_token"),
+                    literal(None).label("middle_src_amount"),
                     literal_column("'forwarded'").label("entry_type"),
                 )
 
@@ -446,6 +560,8 @@ class MayanGenerator(BaseGenerator):
                     MayanSwapAndForwarded.token_out.label("token_out"),
                     MayanSwapAndForwarded.dst_addr.label("dst_addr"),
                     MayanSwapAndForwarded.amount_in.label("amount"),
+                    MayanSwapAndForwarded.middle_token.label("middle_src_token"),
+                    MayanSwapAndForwarded.middle_amount.label("middle_src_amount"),
                     literal_column("'swap_and_forwarded'").label("entry_type"),
                 )
 
@@ -463,40 +579,59 @@ class MayanGenerator(BaseGenerator):
                         Fwd.c.trader.label("src_from_address"),
                         Fwd.c.mayan_protocol.label("src_to_address"),
                         SrcTx.fee.label("src_fee"),
+                        SrcTx.value.label("src_value"),
                         SrcTx.timestamp.label("src_timestamp"),
                         MayanOrderFulfilled.transaction_hash.label("dst_transaction_hash"),
                         MayanOrderFulfilled.blockchain.label("dst_blockchain"),
                         MayanOrderFulfilled.net_amount.label("output_amount"),
+                        MayanOrderFulfilled.middle_dst_token.label("middle_dst_token"),
+                        MayanOrderFulfilled.middle_dst_amount.label("middle_dst_amount"),
                         DstTx.from_address.label("dst_from_address"),
                         DstTx.to_address.label("dst_to_address"),
                         DstTx.fee.label("dst_fee"),
+                        DstTx.value.label("dst_value"),
                         DstTx.timestamp.label("dst_timestamp"),
                         MayanOrderUnlocked.blockchain.label("refund_blockchain"),
                         MayanOrderUnlocked.transaction_hash.label("refund_transaction_hash"),
                         RefundTx.from_address.label("refund_from_address"),
                         RefundTx.to_address.label("refund_to_address"),
                         RefundTx.fee.label("refund_fee"),
+                        RefundTx.value.label("refund_value"),
                         RefundTx.timestamp.label("refund_timestamp"),
                         MayanOrderCreated.key.label("intent_id"),
                         Fwd.c.trader.label("depositor"),
                         Fwd.c.dst_addr.label("recipient"),
                         Fwd.c.token.label("src_contract_address"),
                         Fwd.c.token_out.label("dst_contract_address"),
+                        Fwd.c.middle_src_token.label("middle_src_token"),
+                        Fwd.c.middle_src_amount.label("middle_src_amount"),
                         case(
                             (Fwd.c.amount != None, Fwd.c.amount),  # noqa: E711 DO NOT REPLACE != WITH 'IS NOT'
                             else_=SrcTx.value,
                         ).label("input_amount"),
+                        auction_data.c.auction_id.label("auction_id"),
+                        auction_data.c.auction_first_bid_timestamp.label(
+                            "auction_first_bid_timestamp"
+                        ),
+                        auction_data.c.auction_last_bid_timestamp.label(
+                            "auction_last_bid_timestamp"
+                        ),
+                        auction_data.c.auction_number_of_bids.label("auction_number_of_bids"),
                     )
                     .join(
                         MayanOrderCreated,
                         MayanOrderCreated.transaction_hash == Fwd.c.transaction_hash,
                     )
                     .join(MayanOrderFulfilled, MayanOrderFulfilled.key == MayanOrderCreated.key)
-                    .join(MayanOrderUnlocked, MayanOrderUnlocked.key == MayanOrderCreated.key)
                     .join(SrcTx, SrcTx.transaction_hash == Fwd.c.transaction_hash)
                     .join(DstTx, DstTx.transaction_hash == MayanOrderFulfilled.transaction_hash)
-                    .join(
+                    .outerjoin(MayanOrderUnlocked, MayanOrderCreated.key == MayanOrderUnlocked.key)
+                    .outerjoin(
                         RefundTx, RefundTx.transaction_hash == MayanOrderUnlocked.transaction_hash
+                    )
+                    .outerjoin(
+                        auction_data,
+                        auction_data.c.order_hash == MayanOrderFulfilled.key,
                     )
                     .all()
                 )
@@ -511,6 +646,7 @@ class MayanGenerator(BaseGenerator):
                         src_from_address=row.src_from_address,
                         src_to_address=row.src_to_address,
                         src_fee=row.src_fee,
+                        src_value=row.src_value,
                         src_fee_usd=None,
                         src_timestamp=row.src_timestamp,
                         dst_blockchain=row.dst_blockchain,
@@ -518,6 +654,7 @@ class MayanGenerator(BaseGenerator):
                         dst_from_address=row.dst_from_address,
                         dst_to_address=row.dst_to_address,
                         dst_fee=row.dst_fee,
+                        dst_value=row.dst_value,
                         dst_fee_usd=None,
                         dst_timestamp=row.dst_timestamp,
                         refund_blockchain=row.refund_blockchain,
@@ -525,6 +662,7 @@ class MayanGenerator(BaseGenerator):
                         refund_from_address=row.refund_from_address,
                         refund_to_address=row.refund_to_address,
                         refund_fee=row.refund_fee,
+                        refund_value=row.refund_value,
                         refund_fee_usd=None,
                         refund_timestamp=row.refund_timestamp,
                         intent_id=row.intent_id,
@@ -534,11 +672,21 @@ class MayanGenerator(BaseGenerator):
                         dst_contract_address=row.dst_contract_address,
                         input_amount=row.input_amount,
                         input_amount_usd=None,
+                        middle_src_token=row.middle_src_token,
+                        middle_src_amount=row.middle_src_amount,
+                        middle_src_amount_usd=None,
+                        middle_dst_token=row.middle_dst_token,
+                        middle_dst_amount=row.middle_dst_amount,
+                        middle_dst_amount_usd=None,
                         output_amount=row.output_amount,
                         output_amount_usd=None,
                         refund_amount=row.input_amount,
                         refund_amount_usd=None,
                         refund_token="0x0000000000000000000000000000000000000000",
+                        auction_id=row.auction_id,
+                        auction_first_bid_timestamp=row.auction_first_bid_timestamp,
+                        auction_last_bid_timestamp=row.auction_last_bid_timestamp,
+                        auction_number_of_bids=row.auction_number_of_bids,
                     )
                 )
 
@@ -562,6 +710,38 @@ class MayanGenerator(BaseGenerator):
                 self.CLASS_NAME,
                 func_name,
                 f"Error processing token transfers. Error: {e}",
+            ) from e
+
+    def get_auction_data(self):
+        """
+        Returns a subquery to gather the auction data (id, open timestamp and number of bids)
+        """
+        func_name = "get_auction_data"
+
+        try:
+            results = []
+
+            with self.cross_chain_transactions_repo.get_session() as session:
+                bid_tx = aliased(MayanBlockchainTransaction)
+
+                return (
+                    session.query(
+                        MayanAuctionBid.auction_state.label("auction_id"),
+                        MayanAuctionBid.order_hash.label("order_hash"),
+                        func.min(bid_tx.timestamp).label("auction_first_bid_timestamp"),
+                        func.max(bid_tx.timestamp).label("auction_last_bid_timestamp"),
+                        func.count(bid_tx.transaction_hash).label("auction_number_of_bids"),
+                    )
+                    .join(bid_tx, MayanAuctionBid.signature == bid_tx.transaction_hash)
+                    .group_by(MayanAuctionBid.auction_state, MayanAuctionBid.order_hash)
+                    .subquery()
+                )
+
+            return results
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME, func_name, f"Error fetching auction data. Error: {e}"
             ) from e
 
     def populate_token_info_tables(self, cctxs, start_ts, end_ts):
@@ -667,7 +847,7 @@ class MayanGenerator(BaseGenerator):
                 .where(
                     TokenMetadata.blockchain == "bnb",
                     TokenMetadata.symbol == "DONKEY",
-                    TokenMetadata.address == "0xa49fa5e8106e2d6d6a69e78df9b6a20aab9c4444",
+                    TokenMetadata.address == "0xA49fA5E8106E2d6d6a69E78df9B6A20AaB9c4444",
                 )
                 .execution_options(synchronize_session=False)
             )

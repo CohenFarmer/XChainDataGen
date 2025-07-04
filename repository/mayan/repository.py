@@ -46,6 +46,14 @@ class MayanForwardedRepository(BaseRepository):
                 .first()
             )
 
+    def get_all_forwarded_eth(self):
+        with self.get_session() as session:
+            return (
+                session.query(MayanForwarded)
+                .filter(MayanForwarded.token == "0x0000000000000000000000000000000000000000")
+                .all()
+            )
+
 
 class MayanOrderCreatedRepository(BaseRepository):
     def __init__(self, session_factory):
@@ -63,6 +71,14 @@ class MayanOrderFulfilledRepository(BaseRepository):
     def event_exists(self, key: str):
         with self.get_session() as session:
             return session.query(MayanOrderFulfilled).filter(MayanOrderFulfilled.key == key).first()
+
+    def update_middle_info_order_fulfilled(
+        self, key: str, middle_dst_token: str, middle_dst_amount: float
+    ):
+        with self.get_session() as session:
+            session.query(MayanOrderFulfilled).filter(MayanOrderFulfilled.key == key).update(
+                {"middle_dst_token": middle_dst_token, "middle_dst_amount": middle_dst_amount}
+            )
 
 
 class MayanOrderUnlockedRepository(BaseRepository):
@@ -212,6 +228,7 @@ class MayanCrossChainTransactionRepository(BaseRepository):
                     MayanCrossChainTransaction.src_contract_address,
                     MayanCrossChainTransaction.dst_blockchain,
                     MayanCrossChainTransaction.dst_contract_address,
+                    func.count().label("pair_count"),
                 )
                 .group_by(
                     MayanCrossChainTransaction.src_blockchain,
@@ -219,6 +236,7 @@ class MayanCrossChainTransactionRepository(BaseRepository):
                     MayanCrossChainTransaction.dst_blockchain,
                     MayanCrossChainTransaction.dst_contract_address,
                 )
+                .order_by(func.count().desc())
                 .all()
             )
 

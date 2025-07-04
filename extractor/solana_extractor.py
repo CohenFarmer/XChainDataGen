@@ -59,9 +59,6 @@ class SolanaExtractor(Extractor):
         decoded_instructions = []
         for signature in signatures:
             try:
-                if self.handler.does_transaction_exist_by_hash(signature):
-                    continue
-
                 decoded_tx = self.rpc_client.parseTransactionByHash(signature)
 
                 decoded_instructions.append(decoded_tx)
@@ -80,6 +77,11 @@ class SolanaExtractor(Extractor):
         transactions = []
 
         for decoded_tx in included_txs:
+            if self.handler.does_transaction_exist_by_hash(
+                decoded_tx["transaction"]["transaction"]["signatures"][0]
+            ):
+                continue
+
             transactions.append(
                 self.handler.create_transaction_object(
                     self.blockchain,
@@ -115,8 +117,13 @@ class SolanaExtractor(Extractor):
             )
 
             # if we already have signatures fetched, we can skip fetching them again
-            # with open("fetched_signatures.json", "r") as f:
-            #     all_signatures = json.load(f)
+            # all_signatures = []
+            # with open("extractor/db_out.txt", "r") as f:
+            #     # each line is a tx_hash / signature
+            #     for line in f:
+            #         tx_hash = line.strip()
+            #         if tx_hash:
+            #             all_signatures.append(tx_hash)
 
             all_signatures = list(map(lambda x: x["signature"], all_signatures))
 
