@@ -10,7 +10,7 @@ from config.constants import (
     MAX_NUM_THREADS_EXTRACTOR,
     RPCS_CONFIG_FILE,
 )
-from utils.utils import CustomException, load_solana_api_key
+from utils.utils import CustomException, load_solana_api_key, log_error
 
 
 class RPCClient(ABC):
@@ -115,7 +115,15 @@ class RPCClient(ABC):
                 # exponentially and try again all endpoints. Only return once we have
                 # a correct response
                 time.sleep(backoff)
-                backoff *= 2
+                log_error(
+                    self.bridge,
+                    (
+                        f"Failed to make RPC request to {blockchain_name}, method {method}, "
+                        f"params {params}. Tried RPCs: {tried_rpcs}. Retrying with backoff ",
+                        f"{backoff} seconds.",
+                    ),
+                )
+                backoff = (backoff * 2) if backoff < 30 else 0
 
         except Exception as e:
             raise CustomException(

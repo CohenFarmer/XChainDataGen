@@ -9,6 +9,7 @@ from extractor.mayan.constants import (
 )
 from extractor.mayan.utils.OrderHash import reconstruct_order_hash_from_params
 from repository.database import DBSession
+from repository.mayan.models import MayanBlockchainTransaction, MayanOrderFulfilled
 from repository.mayan.repository import (
     MayanAuctionBidRepository,
     MayanAuctionCloseRepository,
@@ -27,10 +28,14 @@ from repository.mayan.repository import (
 )
 from rpcs.evm_rpc_client import EvmRPCClient
 from utils.utils import (
+    CliColor,
     CustomException,
+    build_log_message_generator,
     convert_32_byte_array_to_evm_address,
     convert_32_byte_array_to_solana_address,
     log_error,
+    log_to_cli,
+    unpad_address,
 )
 
 
@@ -69,17 +74,6 @@ class MayanHandler(BaseHandler):
         self.register_order_repo = MayanRegisterOrderRepository(DBSession)
         self.auction_bid_repo = MayanAuctionBidRepository(DBSession)
         self.auction_close_repo = MayanAuctionCloseRepository(DBSession)
-
-    def handle_transactions(self, transactions: List[Dict[str, Any]]) -> None:
-        func_name = "handle_transactions"
-        try:
-            self.blockchain_transaction_repo.create_all(transactions)
-        except Exception as e:
-            raise CustomException(
-                self.CLASS_NAME,
-                func_name,
-                f"Error writing transactions to database: {e}",
-            ) from e
 
     def does_transaction_exist_by_hash(self, transaction_hash: str) -> Any:
         func_name = "does_transaction_exist_by_hash"
@@ -164,7 +158,7 @@ class MayanHandler(BaseHandler):
     def handle_swap_and_forwarded_eth(self, blockchain, event):
         func_name = "handle_swap_and_forwarded_eth"
 
-        event["tokenIn"] = self.populate_weth_token()
+        event["tokenIn"] = self.populate_native_token()
 
         try:
             return self.handle_swap_and_forwarded(blockchain, event)
@@ -257,7 +251,7 @@ class MayanHandler(BaseHandler):
     def handle_forwarded_eth(self, blockchain, event):
         func_name = "handle_forwarded_eth"
 
-        event["token"] = self.populate_weth_token()
+        event["token"] = self.populate_native_token()
 
         try:
             return self.handle_forwarded(blockchain, event)
@@ -380,6 +374,8 @@ class MayanHandler(BaseHandler):
                     "key": event["key"],
                     "sequence": event["sequence"],
                     "net_amount": event["netAmount"],
+                    "middle_dst_token": None,
+                    "middle_dst_amount": None,
                 }
             )
             return event
@@ -412,7 +408,7 @@ class MayanHandler(BaseHandler):
                 f"{blockchain} -- Tx Hash: {event['transaction_hash']}. Error writing to DB: {e}",
             ) from e
 
-    def populate_weth_token(self) -> str:
+    def populate_native_token(self) -> str:
         return "0x0000000000000000000000000000000000000000"
 
     ### LOGIC FOR SOLANA ###
@@ -449,6 +445,13 @@ class MayanHandler(BaseHandler):
 
                     if instruction["name"] == "initOrder":
                         transfer_instruction = None
+                        swap_instructions = [
+                            instr
+                            for instr in transaction_instructions
+                            if instr["name"] == "SwapEvent"
+                        ]
+
+                        swap_instruction = MayanHandler.resolve_swaps(signature, swap_instructions)
 
                         if transaction_instructions[idx - 1]["name"] == "transfer":
                             transfer_instruction = transaction_instructions[idx - 1]
@@ -456,7 +459,7 @@ class MayanHandler(BaseHandler):
                             transfer_instruction = transaction_instructions[idx - 2]
 
                         included = self.handle_init_order(
-                            signature, transfer_instruction, instruction
+                            signature, transfer_instruction, instruction, swap_instruction
                         )
                     elif instruction["name"] == "unlockBatch":
                         included = self.handle_unlock(
@@ -471,12 +474,23 @@ class MayanHandler(BaseHandler):
                             instruction,
                         )
                     elif instruction["name"] == "fulfill":
+                        transfer_instruction = None
+                        swap_instructions = [
+                            instr
+                            for instr in transaction_instructions
+                            if instr["name"] == "SwapEvent"
+                        ]
+
+                        swap_instruction = MayanHandler.resolve_swaps(signature, swap_instructions)
+
                         if transaction_instructions[idx - 2]["name"] == "transferChecked":
                             transfer_instruction = transaction_instructions[idx - 2]
                         elif transaction_instructions[idx - 1]["name"] == "transfer":
                             transfer_instruction = transaction_instructions[idx - 1]
 
-                        included = self.handle_fulfill(signature, transfer_instruction, instruction)
+                        included = self.handle_fulfill(
+                            signature, transfer_instruction, instruction, swap_instruction
+                        )
                     elif instruction["name"] == "settle":
                         included = self.handle_settle(
                             signature,
@@ -533,7 +547,11 @@ class MayanHandler(BaseHandler):
         return accounts
 
     def handle_init_order(
-        self, signature: str, transfer_instruction: Dict[str, Any], instruction: Dict[str, Any]
+        self,
+        signature: str,
+        transfer_instruction: Dict[str, Any],
+        instruction: Dict[str, Any],
+        swap_event: Dict[str, Any],
     ):
         func_name = "handle_init_order"
 
@@ -574,6 +592,21 @@ class MayanHandler(BaseHandler):
 
             amount_in = int(transfer_instruction["args"]["amount"], 16)
 
+            if swap_event:
+                original_src_token = swap_event["args"]["input_mint"]
+                original_src_amount = int(swap_event["args"]["input_amount"], 16)
+                amm = None
+
+                middle_src_token = swap_event["args"]["output_mint"]
+                middle_src_amount = int(swap_event["args"]["output_amount"], 16)
+            else:
+                original_src_token = account_data["mintFrom"]
+                original_src_amount = amount_in
+                amm = None
+
+                middle_src_amount = None
+                middle_src_token = None
+
             self.init_order_repo.create(
                 {
                     "order_hash": order_hash,
@@ -583,12 +616,12 @@ class MayanHandler(BaseHandler):
                     "state": account_data["state"],
                     "state_from_acc": account_data["stateFromAcc"],
                     "relayer_fee_acc": account_data["relayerFeeAcc"],
-                    "mint_from": account_data["mintFrom"],
+                    "middle_src_token": middle_src_token,
                     "fee_manager_program": account_data["feeManagerProgram"],
                     "token_program": account_data["tokenProgram"],
                     "system_program": account_data["systemProgram"],
-                    "amount_in_min": int(params["amountInMin"], 16),
-                    "amount_in": amount_in,
+                    "middle_src_amount_min": int(params["amountInMin"], 16),
+                    "middle_src_amount": middle_src_amount,
                     "native_input": params["nativeInput"],
                     "fee_submit": int(params["feeSubmit"], 16),
                     "addr_dest": convert_32_byte_array_to_evm_address(params["addrDest"]),
@@ -604,6 +637,9 @@ class MayanHandler(BaseHandler):
                     "fee_rate_mayan": params["feeRateMayan"],
                     "auction_mode": params["auctionMode"],
                     "key_rnd": bytes(params["keyRnd"]).hex(),
+                    "original_src_token": original_src_token,
+                    "original_src_amount": original_src_amount,
+                    "amm": amm,
                 }
             )
 
@@ -661,7 +697,11 @@ class MayanHandler(BaseHandler):
             ) from e
 
     def handle_fulfill(
-        self, signature: str, transfer_instruction: Dict[str, Any], instruction: Dict[str, Any]
+        self,
+        signature: str,
+        transfer_instruction: Dict[str, Any],
+        instruction: Dict[str, Any],
+        swap_event: Dict[str, Any],
     ):
         func_name = "handle_fulfill"
 
@@ -673,19 +713,32 @@ class MayanHandler(BaseHandler):
             if self.fulfill_repo.event_exists(signature):
                 return None
 
-            # we need to extract the amount being sent to the order
-            # by fetching the transfer instruction before the initOrder instruction
-            if (
-                transfer_instruction["name"] != "transfer"
-                and transfer_instruction["name"] != "transferChecked"
-            ):
-                raise CustomException(
-                    self.CLASS_NAME,
-                    func_name,
-                    f"Expected transfer instruction, got {transfer_instruction['name']}",
-                )
+            if swap_event:
+                middle_dst_token = swap_event["args"]["input_mint"]
+                middle_dst_amount = int(swap_event["args"]["input_amount"], 16)
+                amm = None
 
-            amount_in = int(transfer_instruction["args"]["amount"], 16)
+                final_amount = int(swap_event["args"]["output_amount"], 16)
+            else:
+                middle_dst_token = None
+                middle_dst_amount = None
+                amm = None
+
+                # we need to extract the amount being sent to the order
+                # by fetching the transfer instruction before the initOrder instruction
+                if (
+                    transfer_instruction["name"] != "transfer"
+                    and transfer_instruction["name"] != "transferChecked"
+                ):
+                    raise CustomException(
+                        self.CLASS_NAME,
+                        func_name,
+                        f"Expected transfer instruction, got {transfer_instruction['name']}",
+                    )
+
+                amount_in = int(transfer_instruction["args"]["amount"], 16)
+
+                final_amount = amount_in
 
             self.fulfill_repo.create(
                 {
@@ -697,7 +750,10 @@ class MayanHandler(BaseHandler):
                     "dest": account_data["dest"],
                     "system_program": account_data["systemProgram"],
                     "addr_unlocker": addr_unlocker,
-                    "amount": amount_in,
+                    "amount": final_amount,
+                    "middle_dst_token": middle_dst_token,
+                    "middle_dst_amount": middle_dst_amount,
+                    "amm": amm,
                 }
             )
 
@@ -896,7 +952,7 @@ class MayanHandler(BaseHandler):
                 params=params,
             )
 
-            if self.auction_bid_repo.event_exists(order_hash):
+            if self.auction_bid_repo.event_exists(signature):
                 return None
 
             self.auction_bid_repo.create(
@@ -960,4 +1016,255 @@ class MayanHandler(BaseHandler):
                 self.CLASS_NAME,
                 func_name,
                 f"{'solana'} -- Tx Hash: {signature}. Error writing to DB: {e}",
+            ) from e
+
+    def post_processing(self):
+        """
+        Post-process fulfill transactions in EVM to extract middle token and amount from input data.
+        These are needed when swaps occur and are not emitted in the event.
+        """
+        func_name = "post_processing"
+
+        try:
+            # Get all fulfill orders + their input data in a single query
+            with self.order_fulfilled_repo.get_session() as session:
+                results = (
+                    session.query(
+                        MayanOrderFulfilled.key,
+                        MayanOrderFulfilled.transaction_hash,
+                        MayanBlockchainTransaction.input_data,
+                    )
+                    .join(
+                        MayanBlockchainTransaction,
+                        MayanBlockchainTransaction.transaction_hash
+                        == MayanOrderFulfilled.transaction_hash,
+                    )
+                    .all()
+                )
+
+            updates = []
+            for key, tx_hash, input_data in results:
+                log_to_cli(
+                    build_log_message_generator(
+                        self.bridge,
+                        (
+                            f"Post-processing fulfill order: {key} -- Tx Hash: {tx_hash} "
+                            f" {len(updates) / len(results) * 100:.2f}% done...",
+                        ),
+                    ),
+                    CliColor.INFO,
+                )
+
+                if not input_data:
+                    continue
+
+                try:
+                    function_selector = input_data[:10]
+
+                    if function_selector == "0xbc127b88":  # fulfillWithERC20
+                        token_in = unpad_address(input_data[10:74])
+                        amount_in = int(input_data[74:138], 16)
+
+                        updates.append((key, token_in, amount_in))
+
+                    elif function_selector == "0x1c5cf072":  # fulfillWithETH
+                        token_in = self.populate_native_token()
+                        amount_in = int(input_data[10:74], 16)
+
+                        updates.append((key, token_in, amount_in))
+
+                    elif (
+                        function_selector == "0x488c3591" or function_selector == "0x6befa3a5"
+                    ):  # fulfillOrder or directFulfill
+                        # we skip because these functions do not have middle token or amount
+                        continue
+
+                    else:
+                        err = CustomException(
+                            self.CLASS_NAME,
+                            func_name,
+                            (
+                                f"{self.bridge} -- Tx Hash: {tx_hash}. Unknown function ",
+                                f"selector: {function_selector}",
+                            ),
+                        )
+                        log_error(self.bridge, str(err))
+
+                except Exception as decode_err:
+                    err = CustomException(
+                        self.CLASS_NAME,
+                        func_name,
+                        (
+                            f"{self.bridge} -- Tx Hash: {tx_hash}. Error decoding input ",
+                            f"data: {decode_err}",
+                        ),
+                    )
+                    log_error(self.bridge, str(err))
+                    continue
+
+            # Batch update
+            for key, middle_token, middle_amount in updates:
+                self.order_fulfilled_repo.update_middle_info_order_fulfilled(
+                    key,
+                    middle_token,
+                    middle_amount,
+                )
+
+        except Exception as e:
+            raise CustomException(
+                self.CLASS_NAME,
+                func_name,
+                f"{self.bridge} -- Error during post-processing: {e}",
+            ) from e
+
+    @staticmethod
+    def resolve_swaps(signature, swap):
+        func_name = "resolve_swaps"
+
+        if not swap or not isinstance(swap, list):
+            return None
+
+        while True:
+            aggregated = MayanHandler.aggregate_swap_instructions(swap)
+
+            resolved = MayanHandler.resolve_swap_chain(aggregated)
+
+            if len(resolved) == 1:
+                # If there's only one swap, we can stop resolving
+                break
+            else:
+                swap = resolved
+
+        if len(resolved) == 1:
+            item = resolved[0]
+            return {
+                "args": {
+                    "input_mint": item["args"]["input_mint"],
+                    "output_mint": item["args"]["output_mint"],
+                    "input_amount": item["args"]["input_amount"],
+                    "output_amount": item["args"]["output_amount"],
+                }
+            }
+        else:
+            err = CustomException(
+                MayanHandler.CLASS_NAME,
+                func_name,
+                f"Expected one aggregated swap, got {len(aggregated)} swaps in {signature}",
+            )
+            log_error(
+                MayanHandler.CLASS_NAME,
+                str(err),
+            )
+            raise err
+
+    @staticmethod
+    def aggregate_swap_instructions(swap):
+        func_name = "aggregate_swap_instructions"
+
+        if not swap or not isinstance(swap, list):
+            return None
+
+        if len(swap) == 1:
+            # If there's only one swap, return it as is
+            return swap
+
+        try:
+            # Step 2: aggregate same (input_mint, output_mint) swaps
+            aggregated = {}
+            for s in swap:
+                input_mint = s["args"]["input_mint"]
+                output_mint = s["args"]["output_mint"]
+                input_amount = int(s["args"]["input_amount"], 16)
+                output_amount = int(s["args"]["output_amount"], 16)
+
+                key = (input_mint, output_mint)
+                if key not in aggregated:
+                    aggregated[key] = {"input_amount": input_amount, "output_amount": output_amount}
+                else:
+                    aggregated[key]["input_amount"] += input_amount
+                    aggregated[key]["output_amount"] += output_amount
+
+            # return a list of aggregated swaps
+            return [
+                {
+                    "args": {
+                        "input_mint": key[0],
+                        "output_mint": key[1],
+                        "input_amount": hex(value["input_amount"]),
+                        "output_amount": hex(value["output_amount"]),
+                    }
+                }
+                for key, value in aggregated.items()
+            ]
+
+        except Exception as e:
+            raise CustomException(
+                MayanHandler.CLASS_NAME,
+                func_name,
+                f"Error aggregating swap instructions: {e}",
+            ) from e
+
+    @staticmethod
+    def resolve_swap_chain(swap):
+        func_name = "resolve_swap_chain"
+        try:
+            if not swap or not isinstance(swap, list):
+                return []
+
+            if len(swap) == 1:
+                # If there's only one swap, return it as is
+                return swap
+
+            # Build map from (input_mint, input_amount) → swap
+            input_map = {}
+            for s in swap:
+                key = (s["args"]["input_mint"], int(s["args"]["input_amount"], 16))
+                input_map[key] = s
+
+            used = set()
+            chains = []
+
+            for s in swap:
+                if id(s) in used:
+                    continue
+
+                chain = [s]
+                used.add(id(s))
+                current_swap = s
+
+                while True:
+                    output_mint = current_swap["args"]["output_mint"]
+                    output_amount = int(current_swap["args"]["output_amount"], 16)
+                    next_key = (output_mint, output_amount)
+                    next_swap = input_map.get(next_key)
+                    if next_swap and id(next_swap) not in used:
+                        chain.append(next_swap)
+                        used.add(id(next_swap))
+                        current_swap = next_swap
+                    else:
+                        break
+
+                # Reduce this chain
+                input_mint = chain[0]["args"]["input_mint"]
+                output_mint = chain[-1]["args"]["output_mint"]
+                input_amount = int(chain[0]["args"]["input_amount"], 16)
+                output_amount = int(chain[-1]["args"]["output_amount"], 16)
+
+                chains.append(
+                    {
+                        "args": {
+                            "input_mint": input_mint,
+                            "output_mint": output_mint,
+                            "input_amount": hex(input_amount),
+                            "output_amount": hex(output_amount),
+                        }
+                    }
+                )
+
+            return chains
+        except Exception as e:
+            raise CustomException(
+                MayanHandler.CLASS_NAME,
+                func_name,
+                f"Error resolving swap chain: {e}",
             ) from e

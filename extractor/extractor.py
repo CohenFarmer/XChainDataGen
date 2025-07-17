@@ -1,11 +1,15 @@
+import time
 from abc import ABC, abstractmethod
 from queue import Queue
 from urllib.request import BaseHandler
 
 from config.constants import Bridge
 from utils.utils import (
+    CliColor,
     CustomException,
+    build_log_message,
     load_module,
+    log_to_cli,
 )
 
 
@@ -97,3 +101,23 @@ class Extractor(ABC):
     def extract_data(self, start_block: int, end_block: int):
         """Main extraction logic."""
         pass
+
+    def post_processing(self):
+        """Post-processing logic after extraction."""
+        start_time = time.time()
+
+        self.handler.post_processing()
+
+        end_time = time.time()
+
+        log_to_cli(
+            build_log_message(
+                None,
+                None,
+                None,
+                self.bridge,
+                self.blockchain,
+                f"Token prices fetched in {end_time - start_time} seconds.",
+            ),
+            CliColor.SUCCESS,
+        )

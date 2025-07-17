@@ -300,6 +300,8 @@ BRIDGE_CONFIG = {
     }
 }
 
+MAIN_BRIDGE_CONTRACT = "0xc38e4e6a15593f908255214653d3d947ca1c2338"  # Mayan Swift
+
 
 BLOCKCHAIN_IDS = {
     "30": {
@@ -337,34 +339,6 @@ BLOCKCHAIN_IDS = {
     "1": {
         "nativeChainId": None,
         "name": "solana",
-    },
-}
-
-
-WETH_CONTRACT_ADDRESSES = {
-    "base": {
-        "contract_address": "0x4200000000000000000000000000000000000006",
-    },
-    "optimism": {
-        "contract_address": "0x4200000000000000000000000000000000000006",
-    },
-    "arbitrum": {
-        "contract_address": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
-    },
-    "polygon": {
-        "contract_address": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
-    },
-    "ethereum": {
-        "contract_address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    },
-    "linea": {
-        "contract_address": "0xe5d7c2a44ffddf6b295a15c148167daaaf5cf34f",
-    },
-    "bnb": {        
-        "contract_address": "0x4DB5a66E937A9F4473fA95b1cAF1d1E1D62E29EA",
-    },
-    "avalanche": {
-        "contract_address": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
     },
 }
 

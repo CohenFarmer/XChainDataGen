@@ -319,6 +319,9 @@ class PriceGenerator:
         contract_address: str,
     ):
         try:
+            if blockchain == "solana":
+                return None  # Alchemy does not support Solana
+
             if self.has_tried_metadata_fetching_for_contract(blockchain, token_contract):
                 return None
 
@@ -363,6 +366,12 @@ class PriceGenerator:
         blockchain: str = None,
         token_address: str = None,
     ):
+        if blockchain == "solana":
+            return None  # Alchemy does not support Solana
+
+        if symbol is None or name is None:
+            return
+
         log_to_cli(
             build_log_message_generator(
                 bridge,
@@ -370,9 +379,6 @@ class PriceGenerator:
             ),
             CliColor.INFO,
         )
-
-        if symbol is None or name is None:
-            return
 
         if "usd" in symbol.lower() or "dai" in symbol.lower() or "frax" in symbol.lower():
             rows = []

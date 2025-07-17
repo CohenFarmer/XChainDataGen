@@ -118,6 +118,12 @@ class AlchemyClient:
 
                 log_error(bridge, exception)
 
+                if "Your free app has exceeded its limit" in response.text:
+                    # If the error is due to rate limiting, return an empty dict
+                    # The tool will continue to run and fetch metadata for other tokens,
+                    # as the rate limit is only for token price fetching
+                    return {}
+
                 if i < 4:
                     time.sleep(2**i)  # Exponential backoff
                 else:
