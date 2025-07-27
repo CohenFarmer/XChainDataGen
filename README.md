@@ -238,13 +238,5 @@ The analysis of data extracted between Jun 1, 2024 and December 31, 2024 can be 
 This work is an extension of our research. If using this repository, cite as:
 
 ``` bibtex
-@misc{augusto2025xchaindatagencrosschaindatasetgeneration,
-      title={XChainDataGen: A Cross-Chain Dataset Generation Framework}, 
-      author={André Augusto and André Vasconcelos and Miguel Correia and Luyao Zhang},
-      year={2025},
-      eprint={2503.13637},
-      archivePrefix={arXiv},
-      primaryClass={cs.CR},
-      url={https://arxiv.org/abs/2503.13637}, 
-}
+TBC
 ```
