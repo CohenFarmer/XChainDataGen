@@ -4,6 +4,7 @@ from enum import Enum
 # Enum for Bridges
 class Bridge(Enum):
     STARGATE = "stargate"
+    COW = "cow"
     CCTP = "cctp"
     CCIP = "ccip"
     ACROSS = "across"
@@ -113,6 +114,7 @@ BRIDGE_NEEDS_TRANSACTION_BY_HASH_RPC_METHOD = {
     Bridge.RONIN: False,
     Bridge.OMNIBRIDGE: False,
     Bridge.DEBRIDGE: False,
+    Bridge.COW: True,
     Bridge.MAYAN: True,
 }
 

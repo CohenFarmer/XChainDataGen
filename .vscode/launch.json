@@ -8,7 +8,7 @@
         "module": "pytest",
         "justMyCode": true,
         "console": "integratedTerminal",
-        "python": "${workspaceFolder}/.xchaindata/bin/python3.11",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python3.11",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/testing" },
         "args": [
           "-vvv",
@@ -28,7 +28,7 @@
         ],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python3.11",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python3.11",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/testing" }
       },
       {
@@ -39,7 +39,7 @@
         "args": ["extract", "--bridge", "stargate", "--start_ts", "1733616000", "--end_ts", "1735689600", "--blockchains", "ethereum", "polygon", "avalanche", "optimism", "arbitrum", "bnb", "base", "scroll", "linea"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/stargate" }
       },
       {
@@ -50,7 +50,7 @@
         "args": ["generate", "--bridge", "stargate"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/stargate" }
       },
       {
@@ -58,10 +58,10 @@
         "type": "debugpy",
         "request": "launch",
         "program": "${workspaceFolder}/__init__.py",
-        "args": ["extract", "--bridge", "across", "--start_ts", "1734739200", "--end_ts", "1735689600", "--blockchains", "ethereum", "arbitrum", "polygon", "optimism", "base", "scroll", "linea"],
+        "args": ["extract", "--bridge", "across", "--start_ts", "1734739200", "--end_ts", "1734739800", "--blockchains", "ethereum", "arbitrum", "polygon", "optimism", "base", "scroll", "linea"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/across" }
       },
       {
@@ -72,7 +72,7 @@
         "args": ["generate", "--bridge", "across"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/across" }
       },
       {
@@ -83,7 +83,7 @@
         "args": ["extract", "--bridge", "omnibridge", "--start_ts", "1733615945", "--end_ts", "1735689600", "--blockchains", "ethereum", "gnosis"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/omnibridge" }
       },
       {
@@ -94,7 +94,7 @@
         "args": ["generate", "--bridge", "omnibridge"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/omnibridge" }
       },
       {
@@ -105,7 +105,7 @@
         "args": ["extract", "--bridge", "ronin", "--start_ts", "1738195200", "--end_ts", "1738368000", "--blockchains", "ethereum", "ronin"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/ronin" }
       },
       {
@@ -116,7 +116,7 @@
         "args": ["generate", "--bridge", "ronin"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/ronin" }
       },
       {
@@ -127,7 +127,7 @@
         "args": ["extract", "--bridge", "cctp", "--start_ts", "1717196400", "--end_ts", "1735689600", "--blockchains", "ethereum", "arbitrum", "avalanche", "polygon", "optimism", "base"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/cctp" }
       },
       {
@@ -138,7 +138,7 @@
         "args": ["generate", "--bridge", "cctp"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/cctp" }
       },
       {
@@ -149,7 +149,7 @@
         "args": ["extract", "--bridge", "ccip", "--start_ts", "1729090880", "--end_ts", "1735689600", "--blockchains", "ethereum", "arbitrum", "avalanche", "polygon", "optimism", "base", "bnb", "gnosis", "ronin", "linea", "scroll"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/ccip" }
       },
       {
@@ -160,7 +160,7 @@
         "args": ["generate", "--bridge", "ccip"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/ccip" }
       },
       {
@@ -171,7 +171,7 @@
         "args": ["extract", "--bridge", "polygon", "--start_ts", "1717196400", "--end_ts", "1735689600", "--blockchains", "polygon"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/polygon" }
       },
       {
@@ -182,7 +182,7 @@
         "args": ["generate", "--bridge", "polygon"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/polygon" }
       },
       {
@@ -193,7 +193,7 @@
         "args": ["extract", "--bridge", "debridge", "--start_ts", "1717196400", "--end_ts", "1733011200", "--blockchains", "ethereum", "arbitrum", "bnb", "base"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/debridge" }
       },
       {
@@ -204,7 +204,7 @@
         "args": ["generate", "--bridge", "debridge"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/debridge" }
       },
       {
@@ -215,7 +215,7 @@
         "args": ["extract", "--bridge", "mayan", "--start_ts", "1748736000", "--end_ts", "1748908799", "--blockchains", "solana", "ethereum", "base", "avalanche", "optimism", "arbitrum", "bnb", "polygon", "linea", "--solana-range", "BLZRi6frs4X4DNLw56V4EXai1b6QVESN1BhHBTYM9VcY:4AEnT1cquemxzKt3gschN8P1SWwxiEGqanfFuFnRSRx8v7bRbJxUKryCrChHpAyvW8nL3iVPuYB6A4uzUzcvjq4L:5jJRAbP7CAPQvvqpntq3mA3ygx7phegbRoU2T5cafXd4W3iNmHQ21Jmkgonuqt9TAZCoe1DEf14cb6XQ8kd3REM6", "9w1D9okTM8xNE7Ntb7LpaAaoLc6LfU9nHFs2h2KTpX1H:3wFXpiA2JuhgxQuq5BqziSehQUJEQ5t1bF8hicSmSVBTSAmTTBQR7sqbJju7MV9qdKZShwDvUqNzDgY4hUwSnMPh:29o1ARU8gDTSqjqvfXrCbQ5e84qJ5MTcaucnNMBFDBzjphNTCAaVnFBLZ9hDMQfBzt4E1rJGTjjbz1DR79G5cPDU"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/mayan" }
       },
       {
@@ -226,7 +226,7 @@
         "args": ["generate", "--bridge", "mayan"],
         "console": "integratedTerminal",
         "justMyCode": true,
-        "python": "${workspaceFolder}/.xchaindata/bin/python",
+        "python": "${workspaceFolder}/.xchaindata/Scripts/python",
         "env": { "PYTHONPATH": "${workspaceFolder}", "DATABASE_URL": "postgresql://admin:pwd@localhost/mayan" }
       },
     ]
