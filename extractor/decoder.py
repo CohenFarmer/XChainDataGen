@@ -152,9 +152,11 @@ class BridgeDecoder:
             ) from e
 
     def decode(self, contract_addr: str, blockchain: str, log_data: dict) -> dict:
+        func_name = "decode"
         if (contract_addr, blockchain) not in self.contracts.keys():
             raise CustomException(
                 self.CLASS_NAME,
+                func_name,
                 f"Contract {contract_addr} not found in contracts list.",
             )
 

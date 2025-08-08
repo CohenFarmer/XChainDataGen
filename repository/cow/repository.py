@@ -12,7 +12,14 @@ class CowTradeRepository(BaseRepository):
     def __init__(self, session_factory):
         super().__init__(CowTrade, session_factory)
 
-    def event_exists(
+    def event_exists(self, txHash: str):
+        with self.get_session() as session:
+            return (
+                session.query(CowTrade)
+                .filter(CowTrade.transaction_hash == txHash)
+                .first()
+            )
+    """def event_exists(
         self,
         transaction_hash: str,
         trade_id: str,
@@ -50,7 +57,7 @@ class CowTradeRepository(BaseRepository):
                     CowTrade.timestamp == timestamp,
                 )
                 .first()
-            )
+            )"""
         
 class CowBlockchainTransactionRepository(BaseRepository):
     def __init__(self, session_factory):
@@ -100,14 +107,14 @@ class CowCrossChainTransactionRepository(BaseRepository):
             return (
                 session.query(
                     CowCrossChainTransaction.src_blockchain,
-                    CowCrossChainTransaction.src_contract_address,
+                    CowCrossChainTransaction.src_owner,
                     CowCrossChainTransaction.dst_blockchain,
-                    CowCrossChainTransaction.dst_contract_address,
+                    CowCrossChainTransaction.dst_owner,
                 ).group_by(
                     CowCrossChainTransaction.src_blockchain,
-                    CowCrossChainTransaction.src_contract_address,  
+                    CowCrossChainTransaction.src_owner,
                     CowCrossChainTransaction.dst_blockchain,
-                    CowCrossChainTransaction.dst_contract_address,
+                    CowCrossChainTransaction.dst_owner,
                 )
                 .all()
             )

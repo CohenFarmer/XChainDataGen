@@ -16,6 +16,7 @@ def test_extract_data():
 
     # now we can check if the data was extracted correctly
     # For example, we can check if the AcrossV3FundsDeposited table has been populated
+    
     from repository.cow.repository import (
         CowTradeRepository,
     )

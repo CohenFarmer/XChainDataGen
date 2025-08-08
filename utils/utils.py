@@ -199,8 +199,8 @@ def build_log_message_solana(start_sig: str, end_sig: str, bridge: Bridge, messa
 
 
 def build_log_message_generator(bridge: Bridge, message: str = ""):
-    message = f"{datetime.now()} - INFO - {bridge.value} - {message}"
-
+    bridge_name = bridge.value if hasattr(bridge, "value") else str(bridge)
+    message = f"{datetime.now()} - INFO - {bridge_name} - {message}"
     return message
 
 

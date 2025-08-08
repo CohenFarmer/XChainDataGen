@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
 from config.constants import Bridge
-from extractor.across.constants import BRIDGE_CONFIG
+from extractor.cow.constants import BRIDGE_CONFIG
 from extractor.base_handler import BaseHandler
 from repository.cow.repository import (
     CowBlockchainTransactionRepository,
@@ -105,22 +105,25 @@ class CowHandler(BaseHandler):
         func_name = "handle_trade"
         
         try:
-            if self.cow_trade_repo.event_exists(event["orderUid"]):
+            decoded = self.decode_order_uid(event["orderUid"])
+            uid_hex = event["orderUid"]
+            uid_no_0X = uid_hex[2:] if uid_hex.startswith("0x") else uid_hex
+            uid = bytes.fromhex(uid_no_0X)
+            if self.cow_trade_repo.event_exists(uid[:32].hex()):
                 return None
             
-            decoded = self.decode_order_uid(event["orderUid"])
-            order_hash = decoded["order_hash"]
+            #order_hash = decoded["order_hash"]
 
-            enriched_order_data = self.fetch_order_data_from_api(order_hash)
+            #enriched_order_data = self.fetch_order_data_from_api(order_hash)
 
-            response = requests.get(f"https://api.cow.fi/mainnet/api/v1/trades/{event['orderUid']}")
-            trade_info = response.json()
-            tx_hash = trade_info.get("txHash")  
+            #response = requests.get(f"https://api.cow.fi/mainnet/api/v1/trades/{event['orderUid']}")
+            #trade_info = response.json()
+            #tx_hash = trade_info.get("txHash")  
             
             self.cow_trade_repo.create(
                 {
                     "blockchain": blockchain,
-                    "transaction_hash": tx_hash,
+                    "transaction_hash": uid[:32].hex(),
                     "trade_id": event["orderUid"],
                     "owner": event["owner"],
                     "sell_token": event["sellToken"],
@@ -128,13 +131,14 @@ class CowHandler(BaseHandler):
                     "sell_amount": str(event["sellAmount"]),
                     "buy_amount": str(event["buyAmount"]),
                     "fee_amount": str(event["feeAmount"]),
-                    "receiver": enriched_order_data.get("receiver"),
-                    "app_data": enriched_order_data.get("appData"),
                     "valid_to": decoded["valid_to"],
-                    "order_kind": enriched_order_data.get("kind"),
-                    "price_info": enriched_order_data.get("price"),
-                    "from_address": enriched_order_data.get("from"),
-                    "timestamp": enriched_order_data.get("creationDate"),
+                    #"receiver": enriched_order_data.get("receiver"),
+                    #"app_data": enriched_order_data.get("appData"),
+                    #"valid_to": decoded["valid_to"],
+                    #"order_kind": enriched_order_data.get("kind"),
+                    #"price_info": enriched_order_data.get("price"),
+                    #"from_address": enriched_order_data.get("from"),
+                    #"timestamp": enriched_order_data.get("creationDate"),
                 }
             )
             return event
@@ -142,7 +146,7 @@ class CowHandler(BaseHandler):
             raise CustomException(
                 self.CLASS_NAME,
                 func_name,
-                f"{blockchain} -- Tx Hash: {tx_hash}. Error writing to DB: {e}",
+                f"{blockchain} -- Tx Hash: {event['orderUid']}. Error writing to DB: {e}",
             ) from e
         
     """def handle_settlement(self, blockchain, event):
@@ -172,7 +176,7 @@ class CowHandler(BaseHandler):
             ) from e"""
         
 
-    def decode_order_uid(uid_hex: str) -> Dict[str, Any]:
+    def decode_order_uid(self, uid_hex: str) -> Dict[str, Any]:
         uid = bytes.fromhex(uid_hex[2:] if uid_hex.startswith("0x") else uid_hex)
         return {
             "order_hash": "0x" + uid[:32].hex(),

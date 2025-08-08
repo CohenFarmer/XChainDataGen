@@ -114,7 +114,7 @@ BRIDGE_NEEDS_TRANSACTION_BY_HASH_RPC_METHOD = {
     Bridge.RONIN: False,
     Bridge.OMNIBRIDGE: False,
     Bridge.DEBRIDGE: False,
-    Bridge.COW: True,
+    Bridge.COW: False,
     Bridge.MAYAN: True,
 }
 
