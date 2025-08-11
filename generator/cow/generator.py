@@ -1,6 +1,10 @@
+import os
 import time
 
+from jinja2 import clear_caches
 from sqlalchemy import text
+
+from collections import defaultdict
 
 from config.constants import Bridge
 from generator.base_generator import BaseGenerator
@@ -15,6 +19,8 @@ from utils.utils import (
     log_error,
     log_to_cli,
 )
+from generator.cow.cow_api import get_order, fetch_appdata_json, derive_cross_chain_key, derive_fallback_key
+import random
 
 class CowGenerator(BaseGenerator):
     class_name = "CowGenerator"
@@ -23,7 +29,25 @@ class CowGenerator(BaseGenerator):
         super().__init__()
         self.bridge = Bridge.COW
         self.price_generator = PriceGenerator()
-    
+
+    def enrich_trades_with_cross_chain_key(self):
+        func_name = "enrich_trades_with_cross_chain_key"
+        try:
+            to_process = list(self.cow_trade_repo.iter_missing_cross_chain_key(limit=5000))
+            if not to_process:
+                return
+            for t in to_process:
+                order = get_order(t.blockchain, t.trade_id)
+                app_data = order.get("appData") if order else None
+                app_data_cid = order.get("appDataCid") if order else None
+                app_json = fetch_appdata_json(app_data_cid) if app_data_cid else None
+                key = derive_cross_chain_key(order, app_json) if order else None
+                if not key:
+                    key = derive_fallback_key(t.owner, t.sell_token, t.buy_token, t.sell_amount, t.buy_amount, t.valid_to)
+                self.cow_trade_repo.set_cross_chain_fields(t.blockchain, t.trade_id, app_data, app_data_cid, key)
+        except Exception as e:
+            raise CustomException(self.class_name, func_name, f"Failed enriching trades: {e}") from e
+
     def bind_db_to_repos(self):
         self.cow_trade_repo = CowTradeRepository(DBSession)
         self.cow_blockchain_transaction_repo = CowBlockchainTransactionRepository(DBSession)
@@ -38,10 +62,17 @@ class CowGenerator(BaseGenerator):
         func_name = "create_cross_chain_transactions"
 
         try:
+            self.bind_db_to_repos()
             self.match_token_transfers()
 
-            start_ts = int(self.cow_blockchain_transaction_repo.get_min_timestamp()) - 86400
-            end_ts = int(self.cow_blockchain_transaction_repo.get_max_timestamp()) + 86400
+            min_ts = self.cow_blockchain_transaction_repo.get_min_timestamp()
+            max_ts = self.cow_blockchain_transaction_repo.get_max_timestamp()
+            if not min_ts or not max_ts:
+                log_to_cli(build_log_message_generator(self.bridge, "No blockchain tx timestamps found; skipping pricing."), CliColor.WARNING)
+                return
+
+            start_ts = int(min_ts) - 86400
+            end_ts = int(max_ts) + 86400
 
             self.price_generator.populate_native_tokens(
                 self.bridge,
@@ -60,7 +91,7 @@ class CowGenerator(BaseGenerator):
                 "cow_cross_chain_transactions",
                 "sell_amount",
                 "src_blockchain",
-                "src_owner",
+                "sell_token",        
                 "src_valid_to",
                 "sell_amount_usd",
             )
@@ -70,7 +101,7 @@ class CowGenerator(BaseGenerator):
                 "cow_cross_chain_transactions",
                 "buy_amount",
                 "dst_blockchain",
-                "dst_owner",
+                "buy_token",         
                 "dst_valid_to",
                 "buy_amount_usd",
             )
@@ -92,8 +123,6 @@ class CowGenerator(BaseGenerator):
                 "dst_fee",
                 "dst_fee_usd",
             )
-
-            self.fix_token_symbol_clashes()
         except Exception as e:
             exception = CustomException(
                 self.class_name,
@@ -104,96 +133,93 @@ class CowGenerator(BaseGenerator):
 
     def match_token_transfers(self):
         func_name = "match_token_transfers"
-
-        start_time = time.time()
-        log_to_cli(build_log_message_generator(self.bridge, "Matching token transfers..."))
-
-        self.cow_cross_chain_token_transfers_repo.empty_table()
-
-        query = text("""
-        INSERT INTO cow_cross_chain_transactions (
-            src_blockchain,
-            src_transaction_hash,
-            src_owner,
-            src_fee,
-            src_fee_usd,
-            dst_blockchain,
-            dst_transaction_hash,
-            dst_owner,
-            dst_fee,
-            dst_fee_usd,
-            trade_id,
-            sell_token,
-            buy_token,
-            sell_amount,
-            sell_amount_usd,
-            buy_amount,
-            buy_amount_usd,
-            src_valid_to,
-            dst_valid_to
-            )
-        SELECT
-            trade.blockchain AS src_blockchain,
-            trade.transaction_hash AS src_transaction_hash,
-            trade.owner AS src_owner,
-            src_tx.fee AS src_fee,
-            NULL AS src_fee_usd,
-            trade.blockchain AS dst_blockchain,
-            trade.transaction_hash AS dst_transaction_hash,
-            trade.owner AS dst_owner,
-            src_tx.fee AS dst_fee,
-            NULL AS dst_fee_usd,
-            trade.trade_id,
-            trade.sell_token,
-            trade.buy_token,
-            trade.sell_amount,
-            NULL AS sell_amount_usd,
-            trade.buy_amount,
-            NULL AS buy_amount_usd,
-            trade.valid_to AS src_valid_to,
-            trade.valid_to AS dst_valid_to
-        FROM cow_trade trade
-        JOIN cow_blockchain_transactions src_tx
-            ON src_tx.transaction_hash = trade.transaction_hash
-        WHERE src_tx.blockchain = trade.blockchain;
-        """)
-
         try:
-            self.cow_cross_chain_token_transfers_repo.execute(query)
+            self.enrich_trades_with_cross_chain_key()
 
-            size = self.cow_cross_chain_token_transfers_repo.get_number_of_records()
-
-            end_time = time.time()
-            log_to_cli(
-                build_log_message_generator(
-                    self.bridge,
-                    (
-                        f"Token transfers matched in {end_time - start_time} seconds. "
-                        f"Total records inserted: {size}"
-                    ),
+            query = text("""
+                WITH src_tx AS (
+                    SELECT blockchain, lower(transaction_hash) AS txh, MIN(fee) AS fee
+                    FROM cow_blockchain_transactions
+                    GROUP BY 1,2
                 ),
-                CliColor.SUCCESS,
-            )
+                dst_tx AS (
+                    SELECT blockchain, lower(transaction_hash) AS txh, MIN(fee) AS fee
+                    FROM cow_blockchain_transactions
+                    GROUP BY 1,2
+                )
+                INSERT INTO cow_cross_chain_transactions (
+                    src_blockchain, src_transaction_hash, src_owner, src_fee, src_fee_usd,
+                    dst_blockchain, dst_transaction_hash, dst_owner, dst_fee, dst_fee_usd,
+                    trade_id, sell_token, buy_token, sell_amount, sell_amount_usd,
+                    buy_amount, buy_amount_usd, src_valid_to, dst_valid_to
+                )
+                SELECT DISTINCT ON (src_trade.trade_id, src_trade.blockchain, dst_trade.blockchain)
+                    src_trade.blockchain,
+                    src_trade.transaction_hash,
+                    src_trade.owner,
+                    s.fee,
+                    NULL,
+                    dst_trade.blockchain,
+                    dst_trade.transaction_hash,
+                    dst_trade.owner,
+                    d.fee,
+                    NULL,
+                    src_trade.trade_id,
+                    src_trade.sell_token,
+                    src_trade.buy_token,
+                    src_trade.sell_amount,
+                    NULL,
+                    dst_trade.buy_amount,
+                    NULL,
+                    src_trade.valid_to,
+                    dst_trade.valid_to
+                FROM cow_trade src_trade
+                JOIN cow_trade dst_trade
+                  ON src_trade.cross_chain_key IS NOT NULL
+                 AND src_trade.cross_chain_key = dst_trade.cross_chain_key
+                 AND src_trade.blockchain < dst_trade.blockchain
+                LEFT JOIN src_tx s
+                  ON s.txh = lower(src_trade.transaction_hash)
+                 AND s.blockchain = src_trade.blockchain
+                LEFT JOIN dst_tx d
+                  ON d.txh = lower(dst_trade.transaction_hash)
+                 AND d.blockchain = dst_trade.blockchain
+                ORDER BY
+                  src_trade.trade_id,
+                  src_trade.blockchain,
+                  dst_trade.blockchain,
+                  src_trade.log_index
+                ON CONFLICT ON CONSTRAINT uq_cow_cctx_triplet DO NOTHING
+            """)
+            with DBSession() as session:
+                result = session.execute(query)
+                session.commit()
+                inserted = result.rowcount or 0
+            log_to_cli(build_log_message_generator(self.bridge, f"Token transfers matched. Total records inserted: {inserted}"))
         except Exception as e:
-            raise CustomException(
-                self.class_name,
-                func_name,
-                f"Error processing token transfers. Error: {e}",
-            ) from e
+            raise CustomException(self.class_name, func_name, f"Error processing token transfers. Error: {e}") from e
 
     def populate_token_info_tables(self, cctxs, start_ts, end_ts):
         start_time = time.time()
         log_to_cli(build_log_message_generator(self.bridge, "Fetching token prices..."))
 
         for cctx in cctxs:
+            try:
+                src_blockchain = getattr(cctx, "src_blockchain", None) or cctx[0]
+                sell_token = getattr(cctx, "sell_token", None) or cctx[1]
+                dst_blockchain = getattr(cctx, "dst_blockchain", None) or cctx[2]
+                buy_token = getattr(cctx, "buy_token", None) or cctx[3]
+            except Exception:
+                continue
+
             self.price_generator.populate_token_info(
                 self.bridge,
                 self.token_metadata_repo,
                 self.token_price_repo,
-                cctx.src_blockchain,
-                cctx.dst_blockchain,
-                cctx.src_owner,
-                cctx.dst_owner,
+                src_blockchain,
+                dst_blockchain,
+                sell_token,
+                buy_token,
                 start_ts,
                 end_ts,
             )
@@ -207,7 +233,7 @@ class CowGenerator(BaseGenerator):
             CliColor.SUCCESS,
         )
 
-    def fix_token_symbol_clashes(self):
+    '''def fix_token_symbol_clashes(self):
         func_name = "fix_token_symbol_clashes"
 
         query = text(
@@ -234,4 +260,4 @@ class CowGenerator(BaseGenerator):
                     f"Error processing USD values for symbol clashes in cow_cross_chain_transactions."
                     f"Error: {e}"
                 ),
-            ) from e
+            ) from e*/'''

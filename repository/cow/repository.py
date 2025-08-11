@@ -12,52 +12,38 @@ class CowTradeRepository(BaseRepository):
     def __init__(self, session_factory):
         super().__init__(CowTrade, session_factory)
 
-    def event_exists(self, txHash: str):
+    def event_exists(self, blockchain: str, trade_id: str):
         with self.get_session() as session:
             return (
-                session.query(CowTrade)
-                .filter(CowTrade.transaction_hash == txHash)
+                session.query(CowTrade.id)
+                .filter(CowTrade.blockchain == blockchain, CowTrade.trade_id == trade_id)
                 .first()
             )
-    """def event_exists(
-        self,
-        transaction_hash: str,
-        trade_id: str,
-        owner: str,
-        sell_token: str,
-        buy_token: str,
-        sell_amount: str,
-        buy_amount: str,
-        fee_amount: str,
-        receiver: str = None,
-        app_data: str = None,
-        valid_to: str = None,
-        order_kind: str = None,
-        price_info: str = None,
-        from_address: str = None,
-        timestamp: str = None,
-    ):
+
+    def iter_missing_cross_chain_key(self, limit: int = 500):
         with self.get_session() as session:
-            return (
-                session.query(CowTrade).filter(
-                    CowTrade.transaction_hash == transaction_hash,
-                    CowTrade.trade_id == trade_id,
-                    CowTrade.owner == owner,
-                    CowTrade.sell_token == sell_token,
-                    CowTrade.buy_token == buy_token,
-                    CowTrade.sell_amount == sell_amount,
-                    CowTrade.buy_amount == buy_amount,
-                    CowTrade.fee_amount == fee_amount,
-                    CowTrade.receiver == receiver,
-                    CowTrade.app_data == app_data,
-                    CowTrade.valid_to == valid_to,
-                    CowTrade.order_kind == order_kind,
-                    CowTrade.price_info == price_info,
-                    CowTrade.from_address == from_address,
-                    CowTrade.timestamp == timestamp,
-                )
-                .first()
-            )"""
+            for row in (
+                session.query(CowTrade)
+                .filter(CowTrade.cross_chain_key.is_(None))
+                .limit(limit)
+                .all()
+            ):
+                yield row
+
+    def set_cross_chain_fields(self, blockchain: str, trade_id: str, app_data: str | None, app_data_cid: str | None, key: str | None):
+        with self.get_session() as session:
+            session.query(CowTrade).filter(
+                CowTrade.blockchain == blockchain,
+                CowTrade.trade_id == trade_id,
+            ).update(
+                {
+                    "app_data": app_data,
+                    "app_data_cid": app_data_cid,
+                    "cross_chain_key": key,
+                }
+            )
+            session.commit()
+
         
 class CowBlockchainTransactionRepository(BaseRepository):
     def __init__(self, session_factory):
@@ -107,14 +93,14 @@ class CowCrossChainTransactionRepository(BaseRepository):
             return (
                 session.query(
                     CowCrossChainTransaction.src_blockchain,
-                    CowCrossChainTransaction.src_owner,
+                    CowCrossChainTransaction.sell_token,
                     CowCrossChainTransaction.dst_blockchain,
-                    CowCrossChainTransaction.dst_owner,
+                    CowCrossChainTransaction.buy_token,
                 ).group_by(
                     CowCrossChainTransaction.src_blockchain,
-                    CowCrossChainTransaction.src_owner,
+                    CowCrossChainTransaction.sell_token,
                     CowCrossChainTransaction.dst_blockchain,
-                    CowCrossChainTransaction.dst_owner,
+                    CowCrossChainTransaction.buy_token,
                 )
                 .all()
             )

@@ -24,8 +24,8 @@ class PriceGenerator:
     CLASS_NAME = "PriceGenerator"
 
     def __init__(self):
-        self.pairs_tried_price = {}  # {blockchain: [token_contracts, ...]}
-        self.pairs_tried_metadata = {}  # {blockchain: [token_contracts, ...]}
+        self.pairs_tried_price = {}
+        self.pairs_tried_metadata = {} 
 
     def populate_native_tokens(
         self,
@@ -46,91 +46,112 @@ class PriceGenerator:
 
         PriceGenerator.create_null_token_prices(token_price_repo, start_ts, end_ts)
 
-        try:
-            rows = []
-            for blockchain_id in BLOCKCHAIN_IDS.keys():
-                metadata = BLOCKCHAIN_IDS[blockchain_id]
-                blockchain = metadata["name"]
+        processed = 0
+        errors = []
 
-                if "native_token_contract" not in metadata:
+        for blockchain_id, metadata in (BLOCKCHAIN_IDS or {}).items():
+            try:
+                if not metadata:
+                    continue
+
+                blockchain = metadata.get("name")
+                native_contract = metadata.get("native_token_contract")
+                if not blockchain or not native_contract:
+                    continue
+
+                symbol = get_blockchain_native_token_symbol(blockchain)
+                if not symbol:
                     continue
 
                 record = native_token_repo.get_native_token_by_blockchain(blockchain)
-
-                symbol = get_blockchain_native_token_symbol(blockchain)
-
                 if record is None:
-                    rows.append(
-                        {
-                            "symbol": symbol,
-                            "blockchain": blockchain,
-                        }
-                    )
+                    native_token_repo.create_all([{"symbol": symbol, "blockchain": blockchain}])
 
-                token_metadata = token_metadata_repo.get_token_metadata_by_symbol_and_blockchain(
-                    symbol, blockchain
-                )
-                name = token_metadata.name if token_metadata is not None else None
+                tm = token_metadata_repo.get_token_metadata_by_symbol_and_blockchain(symbol, blockchain)
+                name = getattr(tm, "name", None)
+                decimals = getattr(tm, "decimals", None)
 
-                if token_metadata is None:
-                    token_metadata = self.fetch_and_store_token_metadata(
+                if tm is None:
+                    fetched = self.fetch_and_store_token_metadata(
                         bridge,
                         token_metadata_repo,
                         blockchain,
-                        metadata["native_token_contract"],
+                        native_contract,
                         None,
                     )
-
-                    name = token_metadata["name"]
-
-                completed, dates = PriceGenerator.is_token_price_complete(
-                    token_price_repo, start_ts, end_ts, symbol, name
-                )
-
-                if not completed:
-                    if dates is None:
-                        PriceGenerator.fetch_and_store_token_prices(
-                            bridge, token_price_repo, start_ts, end_ts, name=name, symbol=symbol
+                    if not fetched:
+                        log_to_cli(
+                            build_log_message_generator(
+                                bridge, f"Skipping native token for {blockchain}: no metadata."
+                            ),
+                            CliColor.WARNING,
                         )
-                    else:
-                        for [_start_ts, _end_ts] in dates:
-                            PriceGenerator.fetch_and_store_token_prices(
-                                bridge,
-                                token_price_repo,
-                                _start_ts,
-                                _end_ts,
-                                name=name,
-                                symbol=symbol,
-                            )
+                        continue
 
-                # Sometimes when the native token is used, the address is set to
-                # 0x0000000000000000000000000000000000000000
-                # however, if we fetch info from Alchemy, we will not get the
-                # token metadata for the native token, so we need to fill it manually
-                # with the data we have in the NativeToken table and the TokenMetadata table
+                    name = fetched.get("name")
+                    decimals = fetched.get("decimals") or 18
+                    tm = token_metadata_repo.get_token_metadata_by_symbol_and_blockchain(symbol, blockchain)
+
+                
+                if name:
+                    completed, dates = PriceGenerator.is_token_price_complete(
+                        token_price_repo, start_ts, end_ts, symbol, name
+                    )
+                    if not completed:
+                        if not dates:
+                            PriceGenerator.fetch_and_store_token_prices(
+                                bridge, token_price_repo, start_ts, end_ts, name=name, symbol=symbol
+                            )
+                        else:
+                            for _start_ts, _end_ts in dates:
+                                PriceGenerator.fetch_and_store_token_prices(
+                                    bridge, token_price_repo, _start_ts, _end_ts, name=name, symbol=symbol
+                                )
+
+              
                 if not token_metadata_repo.get_token_metadata_by_contract_and_blockchain(
-                    "0x0000000000000000000000000000000000000000",
-                    blockchain,
+                    "0x0000000000000000000000000000000000000000", blockchain
                 ):
                     token_metadata_repo.create(
                         {
                             "symbol": symbol,
-                            "name": name,
-                            "decimals": token_metadata.decimals,
+                            "name": name or symbol,
+                            "decimals": getattr(tm, "decimals", None) or decimals or 18,
                             "blockchain": blockchain,
-                            "address": "0x0000000000000000000000000000000000000000",  # native token
+                            "address": "0x0000000000000000000000000000000000000000",
                         }
                     )
 
-            if len(rows) > 0:
-                native_token_repo.create_all(rows)
+                processed += 1
 
-        except Exception as e:
+            except Warning as w:
+               
+                log_to_cli(
+                    build_log_message_generator(
+                        bridge, f"Native token processing warning for {metadata.get('name')}: {w}"
+                    ),
+                    CliColor.WARNING,
+                )
+                errors.append(f"Warning({type(w).__name__}): {w}")
+                continue
+            except Exception as e:
+                
+                log_to_cli(
+                    build_log_message_generator(
+                        bridge, f"Native token processing failed for {metadata.get('name')}: {type(e).__name__}: {e}"
+                    ),
+                    CliColor.WARNING,
+                )
+                errors.append(f"{type(e).__name__}: {e}")
+                continue
+
+        if processed == 0 and errors:
+        
             raise CustomException(
                 PriceGenerator.CLASS_NAME,
                 "populate_native_tokens",
-                f"Error while populating native tokens: {str(e)}",
-            ) from e
+                f"Failed for all chains. First error: {errors[0]}",
+            )
 
     def populate_token_info(
         self,
@@ -143,27 +164,24 @@ class PriceGenerator:
         output_token: str,
         start_ts: str,
         end_ts: str,
-        # src_contract_address and dst_contract_address exist to store the contract being used in
-        # the bridge that is not the token itself (e.g. a liquidity pool based on the token)
-        src_contract_address: str = None,
-        dst_contract_address: str = None,
+
+        src_owner: str = None,
+        dst_owner: str = None,
     ):
         try:
             token_symbol = None
             token_name = None
 
             src_token_metadata = token_metadata_repo.get_token_metadata_by_contract_and_blockchain(
-                src_contract_address if src_contract_address is not None else input_token,
+                src_owner if src_owner is not None else input_token,
                 src_blockchain,
             )
             dst_token_metadata = token_metadata_repo.get_token_metadata_by_contract_and_blockchain(
-                dst_contract_address if dst_contract_address is not None else output_token,
+                dst_owner if dst_owner is not None else output_token,
                 dst_blockchain,
             )
 
             if input_token is None:
-                # in this case, there is no token recorded in the cctx, therefore we cannot fetch
-                # the token metadata
                 pass
             else:
                 if src_token_metadata is None:
@@ -172,7 +190,7 @@ class PriceGenerator:
                         token_metadata_repo,
                         src_blockchain,
                         input_token,
-                        src_contract_address,
+                        src_owner,
                     )
 
                     if not (metadata is None or "symbol" not in metadata or "name" not in metadata):
@@ -183,7 +201,7 @@ class PriceGenerator:
                     token_symbol = src_token_metadata.symbol
                     token_name = src_token_metadata.name
 
-                # check if we have already fetched the token prices for this symbol
+                
                 if token_symbol is not None and token_name is not None:
                     completed, dates = PriceGenerator.is_token_price_complete(
                         token_price_repo, start_ts, end_ts, token_symbol, token_name
@@ -219,8 +237,6 @@ class PriceGenerator:
                         self.update_pairs_tried_price_fetching(src_blockchain, input_token)
 
             if output_token is None:
-                # in this case, there is no token recorded in the cctx, therefore we cannot fetch
-                # the token metadata
                 pass
             else:
                 if dst_token_metadata is None:
@@ -229,7 +245,7 @@ class PriceGenerator:
                         token_metadata_repo,
                         dst_blockchain,
                         output_token,
-                        dst_contract_address,
+                        dst_owner,
                     )
                     if metadata is None or "symbol" not in metadata or "name" not in metadata:
                         return
@@ -249,8 +265,7 @@ class PriceGenerator:
                     token_name = metadata.name
 
                 if token_symbol is None or token_name is None:
-                    # if the token symbol or name is None, we cannot fetch the prices
-                    # for this token
+                   
 
                     log_to_cli(
                         build_log_message_generator(
@@ -263,7 +278,7 @@ class PriceGenerator:
                     )
                     return
 
-                # check if we have already fetched the token prices for this symbol
+               
                 completed, dates = PriceGenerator.is_token_price_complete(
                     token_price_repo, start_ts, end_ts, token_symbol, token_name
                 )

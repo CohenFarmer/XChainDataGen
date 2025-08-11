@@ -15,6 +15,23 @@ from rpcs.evm_rpc_client import EvmRPCClient
 from utils.utils import CustomException, convert_bin_to_hex, log_error
 import requests
 
+def _to_int(v):
+    if v is None or isinstance(v, bool):
+        return v
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str):
+        s = v.strip()
+        if s == "":
+            return None
+       
+        return int(s, 0)
+
+    if hasattr(v, "hex"):
+        h = v.hex()
+        return int(h, 16)
+    raise TypeError(f"Unexpected type for int conversion: {type(v)}")
+
 class CowHandler(BaseHandler):
     CLASS_NAME = "CowHandler"
 
@@ -80,15 +97,8 @@ class CowHandler(BaseHandler):
 
         for event in events:
             try:
-                if event["topic"] == "0xa07a543ab8a018198e99ca0184c93fe9050a79400a0a723441f84de1d972cc17":
+                if event.get("topic") == "0xa07a543ab8a018198e99ca0184c93fe9050a79400a0a723441f84de1d972cc17":
                     event = self.handle_trade(blockchain, event)
-                #elif event["topic"] == "0x40338ce1a7c49204f0099533b1e9a7ee0a3d261f84974ab7af36105b8c4e9db4":
-                #    event = self.handle_settlement(blockchain, event)
-                """elif event["topic"] == "0xed99827efb37016f2275f98c4bcf71c7551c75d59e9b450f79fa32e60be672c2":
-                    event = self.handle_interaction(blockchain, event)
-                elif event["topic"] == "0x875b6cb035bbd4ac6500fabc6d1e4ca5bdc58a3e2b424ccb5c24cdbebeb009a9":
-                    event = self.handle_order_invalidated(blockchain, event)"""
-
                 if event:
                     included_events.append(event)
 
@@ -103,27 +113,31 @@ class CowHandler(BaseHandler):
     
     def handle_trade(self, blockchain, event):
         func_name = "handle_trade"
+        tx_hash = event.get("transaction_hash") or event.get("transactionHash")
         
         try:
-            decoded = self.decode_order_uid(event["orderUid"])
-            uid_hex = event["orderUid"]
-            uid_no_0X = uid_hex[2:] if uid_hex.startswith("0x") else uid_hex
-            uid = bytes.fromhex(uid_no_0X)
-            if self.cow_trade_repo.event_exists(uid[:32].hex()):
-                return None
+            #decoded = self.decode_order_uid(event["orderUid"])
+            if not tx_hash:
+                raise CustomException(self.CLASS_NAME, func_name, "transaction hash missing in event")
             
-            #order_hash = decoded["order_hash"]
+            tx_hash = tx_hash.lower()
+            if not tx_hash.startswith("0x"):
+                tx_hash = f"0x{tx_hash}"
 
-            #enriched_order_data = self.fetch_order_data_from_api(order_hash)
+            log_index = _to_int(event.get("logIndex"))
+            contract_address = (event.get("contractAddress") or "").lower()
+            block_number = _to_int(event.get("blockNumber"))
 
-            #response = requests.get(f"https://api.cow.fi/mainnet/api/v1/trades/{event['orderUid']}")
-            #trade_info = response.json()
-            #tx_hash = trade_info.get("txHash")  
+            decoded = self.decode_order_uid(event["orderUid"])
+            valid_to = _to_int(decoded.get("valid_to"))
+
+            if self.cow_trade_repo.event_exists(blockchain, event["orderUid"]):
+                return None
             
             self.cow_trade_repo.create(
                 {
                     "blockchain": blockchain,
-                    "transaction_hash": uid[:32].hex(),
+                    "transaction_hash": tx_hash,
                     "trade_id": event["orderUid"],
                     "owner": event["owner"],
                     "sell_token": event["sellToken"],
@@ -131,14 +145,10 @@ class CowHandler(BaseHandler):
                     "sell_amount": str(event["sellAmount"]),
                     "buy_amount": str(event["buyAmount"]),
                     "fee_amount": str(event["feeAmount"]),
-                    "valid_to": decoded["valid_to"],
-                    #"receiver": enriched_order_data.get("receiver"),
-                    #"app_data": enriched_order_data.get("appData"),
-                    #"valid_to": decoded["valid_to"],
-                    #"order_kind": enriched_order_data.get("kind"),
-                    #"price_info": enriched_order_data.get("price"),
-                    #"from_address": enriched_order_data.get("from"),
-                    #"timestamp": enriched_order_data.get("creationDate"),
+                    "log_index": log_index,
+                    "contract_address": contract_address,
+                    "block_number": block_number,
+                    "valid_to": valid_to,
                 }
             )
             return event
