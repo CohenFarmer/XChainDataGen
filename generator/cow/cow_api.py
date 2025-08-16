@@ -1,76 +1,128 @@
-import hashlib
+import os
+import re
+from typing import Dict, Optional
+
 import requests
 
-COW_API_BASE = {
-    "ethereum": ["https://api.cow.fi/mainnet"],
-    "arbitrum": ["https://api.cow.fi/arbitrum", "https://api.cow.fi/arb1", "https://api.cow.fi/arbitrum_one"],
-    "base": ["https://api.cow.fi/base"],
-    "optimism": ["https://api.cow.fi/optimism"],
-    "polygon": ["https://api.cow.fi/polygon"],
+class SupportedChainId:
+    MAINNET = 1
+    OPTIMISM = 10
+    ARBITRUM_ONE = 42161
+    POLYGON = 137
+    BASE = 8453
+
+
+SUBGRAPH_ENDPOINT_BY_CHAIN_ID: Dict[int, str] = {
+    SupportedChainId.MAINNET: "https://api.thegraph.com/subgraphs/name/cowprotocol/cow",
+    SupportedChainId.ARBITRUM_ONE: "https://api.thegraph.com/subgraphs/name/cowprotocol/cow-arbitrum",
+    SupportedChainId.BASE: "https://api.thegraph.com/subgraphs/name/cowprotocol/cow-base",
+    SupportedChainId.OPTIMISM: "https://api.thegraph.com/subgraphs/name/cowprotocol/cow-optimism",
+    SupportedChainId.POLYGON: "https://api.thegraph.com/subgraphs/name/cowprotocol/cow-polygon",
 }
 
-def _normalize_uid(uid: str) -> str:
-    if not uid:
-        return uid
-    u = uid.lower()
-    return u if u.startswith("0x") else f"0x{u}"
+CHAIN_NAME_TO_ID: Dict[str, int] = {
+    "ethereum": SupportedChainId.MAINNET,
+    "mainnet": SupportedChainId.MAINNET,
+    "arbitrum": SupportedChainId.ARBITRUM_ONE,
+    "arbitrum_one": SupportedChainId.ARBITRUM_ONE,
+    "optimism": SupportedChainId.OPTIMISM,
+    "polygon": SupportedChainId.POLYGON,
+    "base": SupportedChainId.BASE,
+}
 
-def get_order(blockchain: str, uid: str) -> dict | None:
-    bases = COW_API_BASE.get(blockchain) or []
-    if isinstance(bases, str):
-        bases = [bases]
-    uid = _normalize_uid(uid)
+_ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_LOG_FILE = os.path.join(_ROOT_DIR, "error_log.log")
+_SESSION: Optional[requests.Session] = None
 
-    last_status = None
-    for base in bases:
+
+def _log_line(msg: str) -> None:
+    try:
+        with open(_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except Exception:
+        pass
+
+
+def _session() -> requests.Session:
+    global _SESSION
+    if _SESSION is not None:
+        return _SESSION
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": "XChainDataGen/1.0",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    })
+    _SESSION = s
+    return s
+
+
+class SubgraphApi:
+    """Lightweight Subgraph client with a run_query method.
+
+    Example usage:
+        api = SubgraphApi({ 'chainId': SupportedChainId.ARBITRUM_ONE })
+        result = api.run_query('{ trades(first: 5) { id } }')
+    """
+
+    def __init__(self, config: Dict[str, int]):
+        chain_id = config.get("chainId") if isinstance(config, dict) else None
+        if not isinstance(chain_id, int):
+            raise ValueError("SubgraphApi requires config with integer 'chainId'")
+        endpoint = SUBGRAPH_ENDPOINT_BY_CHAIN_ID.get(chain_id)
+        if not endpoint:
+            raise ValueError(f"Unsupported chain id: {chain_id}")
+        self.chain_id = chain_id
+        self.endpoint = endpoint
+
+    def run_query(self, query: str, variables: Optional[dict] = None, timeout: int = 30) -> dict:
         try:
-            url = f"{base}/api/v1/orders/{uid}"
-            r = requests.get(url, timeout=10, headers={"User-Agent": "XChainDataGen/1.0"})
-            last_status = r.status_code
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            continue
-    return None
+            resp = _session().post(self.endpoint, json={"query": query, "variables": variables or {}}, timeout=timeout)
+            if resp.status_code != 200:
+                _log_line(f"COW_SUBGRAPH non200 chainId={self.chain_id} status={resp.status_code}")
+                return {}
+            data = resp.json()
+            return data or {}
+        except Exception as e:
+            _log_line(f"COW_SUBGRAPH exception chainId={self.chain_id} err={type(e).__name__}:{e}")
+            return {}
 
-def fetch_appdata_json(cid: str) -> dict | None:
-    if not cid:
+
+def extract_cid(value: Optional[str]) -> Optional[str]:
+    """Extract a probable IPFS CID from appData if it's an IPFS URL or a bare CID."""
+    if not value or not isinstance(value, str):
         return None
-    for base in ("https://gateway.cow.fi/ipfs", "https://ipfs.io/ipfs"):
-        try:
-            r = requests.get(f"{base}/{cid}", timeout=10, headers={"User-Agent": "XChainDataGen/1.0"})
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            pass
+    v = value.strip()
+    if v.lower().startswith("ipfs://"):
+        v = v[7:]
+        if v.lower().startswith("ipfs/"):
+            v = v[5:]
+    m = re.search(r"/ipfs/([A-Za-z0-9]+)", v)
+    if m:
+        v = m.group(1)
+    if (v.startswith("Qm") and len(v) >= 46) or (v.startswith("baf") and len(v) >= 46):
+        return v
     return None
 
-def derive_cross_chain_key(order_json: dict, appdata_json: dict | None) -> str | None:
-    if not order_json:
+
+def get_order(blockchain: str, uid: str) -> Optional[dict]:
+    """Subgraph-only order fetch. Returns {'appData', 'appDataCid'} or None."""
+    try:
+        chain_id = CHAIN_NAME_TO_ID.get((blockchain or "").lower())
+        if not chain_id or not uid:
+            return None
+        api = SubgraphApi({"chainId": chain_id})
+        query = "query ($id: ID!) { order(id: $id) { id appData } }"
+        out = api.run_query(query, variables={"id": uid.lower()})
+        order = (out or {}).get("data", {}).get("order")
+        if not order:
+            return None
+        app_data = order.get("appData")
+        return {
+            "appData": app_data,
+            "appDataCid": extract_cid(app_data) if app_data else None,
+        }
+    except Exception as e:
+        _log_line(f"COW_SUBGRAPH get_order exception chain={blockchain} uid={uid} err={type(e).__name__}:{e}")
         return None
-    fields = []
-    if appdata_json:
-        fields.extend([
-            appdata_json.get("intentId"),
-            (appdata_json.get("xchain") or {}).get("intentId") if isinstance(appdata_json.get("xchain"), dict) else None,
-            (appdata_json.get("metadata") or {}).get("intentId") if isinstance(appdata_json.get("metadata"), dict) else None,
-            (appdata_json.get("metadata") or {}).get("quoteId") if isinstance(appdata_json.get("metadata"), dict) else None,
-        ])
-    fields.extend([order_json.get("appDataCid"), order_json.get("appData")])
-    for f in fields:
-        if f:
-            return str(f)
-    return None
 
-def derive_fallback_key(owner: str, sell_token: str, buy_token: str, sell_amount: str | int, buy_amount: str | int, valid_to: int) -> str:
-    # Deterministic composite; hash to keep it compact
-    parts = [
-        (owner or "").lower(),
-        (sell_token or "").lower(),
-        (buy_token or "").lower(),
-        str(sell_amount),
-        str(buy_amount),
-        str(valid_to or 0),
-    ]
-    raw = "|".join(parts).encode("utf-8")
-    return "fallback:" + hashlib.sha256(raw).hexdigest()

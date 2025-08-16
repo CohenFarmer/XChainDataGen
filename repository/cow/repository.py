@@ -32,18 +32,46 @@ class CowTradeRepository(BaseRepository):
 
     def set_cross_chain_fields(self, blockchain: str, trade_id: str, app_data: str | None, app_data_cid: str | None, key: str | None):
         with self.get_session() as session:
+            updates = {}
+            if app_data is not None:
+                updates["app_data"] = func.coalesce(CowTrade.app_data, app_data)
+            if app_data_cid is not None:
+                updates["app_data_cid"] = func.coalesce(CowTrade.app_data_cid, app_data_cid)
+            if key is not None:
+                updates["cross_chain_key"] = func.coalesce(CowTrade.cross_chain_key, key)
+            if not updates:
+                return
             session.query(CowTrade).filter(
                 CowTrade.blockchain == blockchain,
                 CowTrade.trade_id == trade_id,
-            ).update(
-                {
-                    "app_data": app_data,
-                    "app_data_cid": app_data_cid,
-                    "cross_chain_key": key,
-                }
-            )
+            ).update(updates, synchronize_session=False)
             session.commit()
 
+    def iter_missing_appdata(self, limit: int = 500):
+        with self.get_session() as session:
+            for row in (
+                session.query(CowTrade)
+                .filter((CowTrade.app_data.is_(None)) | (CowTrade.app_data_cid.is_(None)))
+                .limit(limit)
+                .all()
+            ):
+                yield row
+
+    def update_appdata_fields_if_missing(self, blockchain: str, trade_id: str, app_data: str | None, app_data_cid: str | None):
+        # Only fill app_data/app_data_cid if currently null; do not overwrite existing non-null values
+        updates = {}
+        if app_data is not None:
+            updates["app_data"] = func.coalesce(CowTrade.app_data, app_data)
+        if app_data_cid is not None:
+            updates["app_data_cid"] = func.coalesce(CowTrade.app_data_cid, app_data_cid)
+        if not updates:
+            return
+        with self.get_session() as session:
+            session.query(CowTrade).filter(
+                CowTrade.blockchain == blockchain,
+                CowTrade.trade_id == trade_id,
+            ).update(updates, synchronize_session=False)
+            session.commit()
         
 class CowBlockchainTransactionRepository(BaseRepository):
     def __init__(self, session_factory):

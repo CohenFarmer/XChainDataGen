@@ -1,4 +1,5 @@
 import time
+import warnings
 from datetime import datetime, timedelta
 
 from sqlalchemy import text
@@ -49,6 +50,7 @@ class PriceGenerator:
         processed = 0
         errors = []
 
+        # Suppress library warnings potentially promoted to exceptions by global filters
         for blockchain_id, metadata in (BLOCKCHAIN_IDS or {}).items():
             try:
                 if not metadata:
@@ -72,25 +74,25 @@ class PriceGenerator:
                 decimals = getattr(tm, "decimals", None)
 
                 if tm is None:
-                    fetched = self.fetch_and_store_token_metadata(
-                        bridge,
-                        token_metadata_repo,
-                        blockchain,
-                        native_contract,
-                        None,
-                    )
-                    if not fetched:
-                        log_to_cli(
-                            build_log_message_generator(
-                                bridge, f"Skipping native token for {blockchain}: no metadata."
-                            ),
-                            CliColor.WARNING,
+                    # Try to fetch metadata from provider; if it fails, fall back to sensible defaults
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        fetched = self.fetch_and_store_token_metadata(
+                            bridge,
+                            token_metadata_repo,
+                            blockchain,
+                            native_contract,
+                            None,
                         )
-                        continue
 
-                    name = fetched.get("name")
-                    decimals = fetched.get("decimals") or 18
-                    tm = token_metadata_repo.get_token_metadata_by_symbol_and_blockchain(symbol, blockchain)
+                    if fetched:
+                        name = fetched.get("name") or symbol
+                        decimals = fetched.get("decimals") or 18
+                        tm = token_metadata_repo.get_token_metadata_by_symbol_and_blockchain(symbol, blockchain)
+                    else:
+                        # Fallback defaults so we can still calculate fees in USD if prices are available
+                        name = name or symbol
+                        decimals = decimals or 18
 
                 
                 if name:
@@ -146,11 +148,13 @@ class PriceGenerator:
                 continue
 
         if processed == 0 and errors:
-        
-            raise CustomException(
-                PriceGenerator.CLASS_NAME,
-                "populate_native_tokens",
-                f"Failed for all chains. First error: {errors[0]}",
+            # Don't fail the whole pipeline; just warn and continue.
+            log_to_cli(
+                build_log_message_generator(
+                    bridge,
+                    f"Native token pricing unavailable for all chains. First error: {errors[0]}",
+                ),
+                CliColor.WARNING,
             )
 
     def populate_token_info(
@@ -348,7 +352,9 @@ class PriceGenerator:
                 CliColor.INFO,
             )
 
-            metadata = AlchemyClient.get_token_metadata(blockchain, token_contract)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                metadata = AlchemyClient.get_token_metadata(blockchain, token_contract)
 
             if metadata is None or "symbol" not in metadata or "name" not in metadata:
                 return None
@@ -359,14 +365,14 @@ class PriceGenerator:
                 {
                     "symbol": metadata["symbol"],
                     "name": metadata["name"],
-                    "decimals": metadata["decimals"] if metadata["decimals"] else 1,
+                    "decimals": metadata.get("decimals") or 18,
                     "blockchain": blockchain,
                     "address": token_contract if contract_address is None else contract_address,
                 }
             )
 
             return metadata
-        except Exception:
+        except BaseException:
             return None
         finally:
             self.update_pairs_tried_metadata_fetching(blockchain, token_contract)
@@ -414,14 +420,24 @@ class PriceGenerator:
             token_price_repo.create_all(rows)
             return
 
-        if blockchain is None and token_address is None:
-            token_prices = AlchemyClient.get_token_prices_by_symbol_or_address(
-                bridge, start_ts, end_ts, symbol=symbol
+        try:
+            if blockchain is None and token_address is None:
+                token_prices = AlchemyClient.get_token_prices_by_symbol_or_address(
+                    bridge, start_ts, end_ts, symbol=symbol
+                )
+            else:
+                token_prices = AlchemyClient.get_token_prices_by_symbol_or_address(
+                    bridge, start_ts, end_ts, blockchain=blockchain, token_address=token_address
+                )
+        except Exception as e:
+            log_to_cli(
+                build_log_message_generator(
+                    bridge,
+                    f"Token price fetch skipped for {symbol or token_address}: {type(e).__name__}: {e}",
+                ),
+                CliColor.WARNING,
             )
-        else:
-            token_prices = AlchemyClient.get_token_prices_by_symbol_or_address(
-                bridge, start_ts, end_ts, blockchain=blockchain, token_address=token_address
-            )
+            return
 
         if token_prices is None or "data" not in token_prices:
             return
