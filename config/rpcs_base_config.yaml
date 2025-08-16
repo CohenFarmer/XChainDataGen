@@ -72,6 +72,9 @@ blockchains:
   - "https://optimism-rpc.publicnode.com"
   - "https://optimism.gateway.tenderly.co"
   - "https://optimism.drpc.org"
+  - "https://optimism-mainnet.public.blastapi.io"
+  - "https://1rpc.io/op"
+  - "https://rpc.ankr.com/optimism"
 
 - name: polygon
   contract: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
@@ -82,6 +85,9 @@ blockchains:
   rpcs:
   - "https://rpc-mainnet.matic.quiknode.pro"
   - "https://polygon.gateway.tenderly.co"
+  - "https://polygon-mainnet.public.blastapi.io"
+  - "https://polygon.blockpi.network/v1/rpc/public"
+  - "https://1rpc.io/matic"
   # - "https://polygon-rpc.com/" # This RPC is unreliable and often down / returns inconsistent results
   # - "https://polygon.drpc.org" # This RPC is unreliable and often down / returns inconsistent results
   # - "https://rpc.ankr.com/polygon" # This RPC is unreliable and often down / returns inconsistent results
@@ -104,6 +110,10 @@ blockchains:
   - "https://base.drpc.org"
   - "https://base.api.onfinality.io/public"
   - "https://base.lava.build"
+  - "https://1rpc.io/base"
+  # Optional provider-backed endpoints (require API keys):
+  # - "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_BASE_KEY}"
+  # - "https://base-mainnet.infura.io/v3/${INFURA_KEY}"
 
 - name: bnb
   contract: "0xBA5Fe23f8a3a24BEd3236F05F2FcF35fd0BF0B5C"

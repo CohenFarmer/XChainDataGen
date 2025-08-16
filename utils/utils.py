@@ -158,6 +158,7 @@ class CliColor(Enum):
     INFO = "\033[93m"
     SUCCESS = "\033[92m"
     ERROR = "\033[91m"
+    WARNING = "\033[93m"
 
 
 def log_to_cli(message: str = "", color: CliColor = CliColor.INFO):
@@ -218,9 +219,15 @@ def load_abi(root_dir: str, bridge: Bridge, blockchain, contract_addr: str):
         root_dir, bridge.value, "ABIs", blockchain, f"{contract_addr.lower()}.json"
     )
 
-    with open(abi_path, "r") as abi_file:
-        abi = json.load(abi_file)
-        return abi
+    # Use utf-8-sig to gracefully handle files saved with a UTF-8 BOM on Windows
+    try:
+        with open(abi_path, "r", encoding="utf-8-sig") as abi_file:
+            abi = json.load(abi_file)
+            return abi
+    except json.JSONDecodeError as e:
+        raise CustomException(
+            "utils", "load_abi", f"Failed to parse ABI JSON at {abi_path}: {e}"
+        ) from e
 
 
 class CustomException(Exception):

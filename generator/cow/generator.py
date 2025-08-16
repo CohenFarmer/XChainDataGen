@@ -1,5 +1,6 @@
 import os
 import time
+import traceback
 
 from jinja2 import clear_caches
 from sqlalchemy import text
@@ -19,7 +20,8 @@ from utils.utils import (
     log_error,
     log_to_cli,
 )
-from generator.cow.cow_api import get_order, fetch_appdata_json, derive_cross_chain_key, derive_fallback_key
+from generator.cow.cow_api import get_order
+
 import random
 
 class CowGenerator(BaseGenerator):
@@ -33,20 +35,49 @@ class CowGenerator(BaseGenerator):
     def enrich_trades_with_cross_chain_key(self):
         func_name = "enrich_trades_with_cross_chain_key"
         try:
-            to_process = list(self.cow_trade_repo.iter_missing_cross_chain_key(limit=5000))
-            if not to_process:
-                return
-            for t in to_process:
-                order = get_order(t.blockchain, t.trade_id)
-                app_data = order.get("appData") if order else None
-                app_data_cid = order.get("appDataCid") if order else None
-                app_json = fetch_appdata_json(app_data_cid) if app_data_cid else None
-                key = derive_cross_chain_key(order, app_json) if order else None
-                if not key:
-                    key = derive_fallback_key(t.owner, t.sell_token, t.buy_token, t.sell_amount, t.buy_amount, t.valid_to)
-                self.cow_trade_repo.set_cross_chain_fields(t.blockchain, t.trade_id, app_data, app_data_cid, key)
+            batch = 0
+            limit = 5000
+            while True:
+                to_process = list(self.cow_trade_repo.iter_missing_cross_chain_key(limit=limit))
+                if not to_process:
+                    break
+                batch += 1
+                for r in to_process:
+                    order = get_order(r.blockchain, r.trade_id)
+                    app_data = order.get("appData") if order else None
+                    app_data_cid = order.get("appDataCid") if order else None
+
+                    
+                    cross_chain_key = app_data_cid or app_data
+
+                    self.cow_trade_repo.set_cross_chain_fields(r.blockchain, r.trade_id, app_data, app_data_cid, cross_chain_key)
+              
+                if len(to_process) < limit:
+                    break
         except Exception as e:
-            raise CustomException(self.class_name, func_name, f"Failed enriching trades: {e}") from e
+            tb = traceback.format_exc()
+            raise CustomException(self.class_name, func_name, f"Failed enriching trades: {type(e).__name__}: {e}\n{tb}") from e
+
+    def backfill_missing_appdata(self):
+        func_name = "backfill_missing_appdata"
+        try:
+            limit = 5000
+            while True:
+                to_process = list(self.cow_trade_repo.iter_missing_appdata(limit=limit))
+                if not to_process:
+                    break
+                for t in to_process:
+                    order = get_order(t.blockchain, t.trade_id)
+                    if not order:
+                        continue
+                    app_data = order.get("appData")
+                    app_data_cid = order.get("appDataCid")
+                    self.cow_trade_repo.update_appdata_fields_if_missing(t.blockchain, t.trade_id, app_data, app_data_cid)
+                if len(to_process) < limit:
+                    break
+        except Exception as e:
+            tb = traceback.format_exc()
+            raise CustomException(self.class_name, func_name, f"Failed backfilling appdata: {type(e).__name__}: {e}\n{tb}") from e
 
     def bind_db_to_repos(self):
         self.cow_trade_repo = CowTradeRepository(DBSession)
@@ -63,12 +94,27 @@ class CowGenerator(BaseGenerator):
 
         try:
             self.bind_db_to_repos()
+
+            max_passes = 2
+            prev_missing = None
+            for _ in range(max_passes):
+                self.enrich_trades_with_cross_chain_key()
+            
+                remaining = sum(1 for _ in self.cow_trade_repo.iter_missing_appdata(limit=100000))
+                if prev_missing is not None and remaining >= prev_missing:
+                    break
+                if remaining == 0:
+                    break
+                prev_missing = remaining
+                time.sleep(0.5)
             self.match_token_transfers()
+        
+            self.backfill_missing_appdata()
 
             min_ts = self.cow_blockchain_transaction_repo.get_min_timestamp()
             max_ts = self.cow_blockchain_transaction_repo.get_max_timestamp()
             if not min_ts or not max_ts:
-                log_to_cli(build_log_message_generator(self.bridge, "No blockchain tx timestamps found; skipping pricing."), CliColor.WARNING)
+                log_to_cli(build_log_message_generator(self.bridge, "No blockchain tx timestamps found; skipping pricing."), CliColor.INFO)
                 return
 
             start_ts = int(min_ts) - 86400
@@ -124,10 +170,11 @@ class CowGenerator(BaseGenerator):
                 "dst_fee_usd",
             )
         except Exception as e:
+            tb = traceback.format_exc()
             exception = CustomException(
                 self.class_name,
                 func_name,
-                f"Error processing cross chain transactions. Error: {e}",
+                f"Error processing cross chain transactions. {type(e).__name__}: {e}\n{tb}",
             )
             log_error(self.bridge, exception)
 
@@ -197,7 +244,8 @@ class CowGenerator(BaseGenerator):
                 inserted = result.rowcount or 0
             log_to_cli(build_log_message_generator(self.bridge, f"Token transfers matched. Total records inserted: {inserted}"))
         except Exception as e:
-            raise CustomException(self.class_name, func_name, f"Error processing token transfers. Error: {e}") from e
+            tb = traceback.format_exc()
+            raise CustomException(self.class_name, func_name, f"Error processing token transfers. {type(e).__name__}: {e}\n{tb}") from e
 
     def populate_token_info_tables(self, cctxs, start_ts, end_ts):
         start_time = time.time()
