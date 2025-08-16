@@ -123,7 +123,6 @@ class FlyGenerator(BaseGenerator):
 
         self.cctx_repo.empty_table()
 
-        # Ensure new human-readable date columns exist on older databases
         try:
             self.cctx_repo.execute(
                 text(
@@ -136,7 +135,6 @@ class FlyGenerator(BaseGenerator):
                 )
             )
         except Exception:
-            # If the DB doesn't support IF NOT EXISTS or lacks permissions, continue without failing.
             pass
 
         # Join strategy:
