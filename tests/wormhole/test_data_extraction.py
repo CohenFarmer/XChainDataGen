@@ -9,7 +9,7 @@ def test_extract_data():
         blockchains=["ethereum", "arbitrum", "polygon", "optimism", "base", "avalanche", "bnb", "scroll"],
         bridge="wormhole",
         start_ts=1733011200,  # 1st Dec 2024 00:00
-        end_ts=1733616000  # 8th Dec 2024 00:00
+        end_ts=1733097600 # 2nd Dec 2024 00:00
     )
 
     Cli.extract_data(args)
@@ -19,6 +19,8 @@ def test_extract_data():
         WormholeRedeemedRepository,
     WormholeCrossChainTransactionRepository,
     )
+
+
     from repository.database import DBSession
 
     published_repo = WormholePublishedRepository(DBSession)

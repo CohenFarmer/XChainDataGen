@@ -8,6 +8,7 @@ class Bridge(Enum):
     CCTP = "cctp"
     CCIP = "ccip"
     ACROSS = "across"
+    ROUTER = "router"
     POLYGON = "polygon"
     RONIN = "ronin"
     OMNIBRIDGE = "omnibridge"
@@ -112,6 +113,7 @@ BRIDGE_NEEDS_TRANSACTION_BY_HASH_RPC_METHOD = {
     Bridge.CCTP: False,
     Bridge.CCIP: False,
     Bridge.ACROSS: False,
+    Bridge.ROUTER: False,
     Bridge.POLYGON: False,
     Bridge.RONIN: False,
     Bridge.OMNIBRIDGE: False,

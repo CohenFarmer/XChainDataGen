@@ -15,7 +15,6 @@ from repository.fly.repository import (
 	FlySwapOutRepository,
 )
 
-
 class FlyHandler(BaseHandler):
 	CLASS_NAME = "FlyHandler"
 
