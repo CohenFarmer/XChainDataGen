@@ -9,7 +9,7 @@ def test_extract_data():
         blockchains=["ethereum", "arbitrum", "polygon", "optimism", "base", "avalanche"],
         bridge="fly",
         start_ts=1733011200, # 1st Dec 2024 00:00
-        end_ts=1733616000 # 8th Dec 2024 00:00
+        end_ts=1733097600 # 8th Dec 2024 00:00
     )
 
     Cli.extract_data(args)
