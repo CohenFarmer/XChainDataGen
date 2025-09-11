@@ -16,6 +16,7 @@ class Bridge(Enum):
     MAYAN = "mayan"
     FLY = "fly"
     WORMHOLE = "wormhole"
+    ECO = "eco"
 
 
 BLOCKCHAIN_IDS = {
@@ -122,6 +123,7 @@ BRIDGE_NEEDS_TRANSACTION_BY_HASH_RPC_METHOD = {
     Bridge.MAYAN: True,
     Bridge.FLY: False,
     Bridge.WORMHOLE: False,
+    Bridge.ECO: False,
 }
 
 RPCS_CONFIG_FILE = "config/rpcs_config.yaml"
