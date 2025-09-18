@@ -8,7 +8,7 @@ def test_extract_and_generate_router():
         blockchains=["ethereum", "arbitrum", "optimism", "base", "polygon", "bnb", "avalanche"],
         bridge="router",
         start_ts=1733011200,  # 1st Dec 2024 00:00
-        end_ts=1733097600 # 2nd Dec 2024 00:00
+        end_ts=1733032800 # 2nd Dec 2024 00:00 1733097600
     )
 
     Cli.extract_data(args)
