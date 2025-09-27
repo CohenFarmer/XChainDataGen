@@ -154,15 +154,15 @@ class EcoGenerator(BaseGenerator):
                 dst_tx.blockchain as dst_blockchain,
                 dst_tx.transaction_hash as dst_transaction_hash,
                 dst_tx.from_address as dst_from_address,
-                dst_tx.to_address as dst_to_address,
+                f.claimant as dst_to_address,
                 dst_tx.fee as dst_fee,
                 NULL as dst_fee_usd,
                 dst_tx.timestamp as dst_timestamp,
                 ic.inbox as src_contract_address,
                 dst_tx.to_address as dst_contract_address,
-                NULL as input_amount,
+                ic.native_value as input_amount,
                 NULL as input_amount_usd,
-                NULL as output_amount,
+                ic.native_value as output_amount,
                 NULL as output_amount_usd,
                 ic.intent_hash as intent_hash
             FROM eco_intent_created ic

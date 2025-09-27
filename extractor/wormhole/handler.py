@@ -10,6 +10,7 @@ from repository.wormhole.repository import (
 	WormholePublishedRepository,
 	WormholeRedeemedRepository,
 )
+from extractor.wormhole.payload import extract_amount
 from utils.utils import CustomException, convert_bin_to_hex
 
 
@@ -112,6 +113,7 @@ class WormholeHandler(BaseHandler):
 				if event.get("consistencyLevel") is not None else None,
 				"emitter_address_32": emitter_address_32,
 				"emitter_chain_id": emitter_chain_id,
+				"amount": extract_amount(payload_hex),
 			}
 		)
 		return event

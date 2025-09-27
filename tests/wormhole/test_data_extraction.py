@@ -8,8 +8,9 @@ def test_extract_data():
     args = argparse.Namespace(
         blockchains=["ethereum", "arbitrum", "polygon", "optimism", "base", "avalanche", "bnb", "scroll"],
         bridge="wormhole",
-        start_ts=1733011200,  # 1st Dec 2024 00:00
-        end_ts=1733097600 # 2nd Dec 2024 00:00
+        start_ts=1733011200,  # 1st of July 2025 00:00
+        end_ts=1733097600
+        #end_ts=1735653600  # 1st of August 2025 00:00
     )
 
     Cli.extract_data(args)
