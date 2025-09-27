@@ -159,9 +159,9 @@ class WormholeGenerator(BaseGenerator):
                 TO_CHAR(TO_TIMESTAMP(dtx.timestamp), 'DD/MM/YY') as dst_date,
                 stx.to_address as src_contract_address,
                 dtx.to_address as dst_contract_address,
-                NULL as input_amount,
+                pub.amount as input_amount,
                 NULL as input_amount_usd,
-                NULL as output_amount,
+                pub.amount as output_amount,
                 NULL as output_amount_usd
             FROM wormhole_published pub
             JOIN wormhole_blockchain_transactions stx ON stx.transaction_hash = pub.transaction_hash

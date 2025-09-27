@@ -8,8 +8,9 @@ def test_extract_and_generate_eco():
     args = argparse.Namespace(
         blockchains=["ethereum", "base", "optimism", "polygon", "arbitrum"],
         bridge="eco",
-        start_ts=1752806400,  # 18th of July 2025 00:00
-        end_ts=1752979200  # 20th of July 2025 00:00
+        start_ts=1751292000,  # 1st of July 2025 00:00
+        end_ts=  1751368400
+        #end_ts= 1753970400  # 1st of August 2025 00:00
     )
 
     Cli.extract_data(args)

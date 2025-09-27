@@ -18,6 +18,7 @@ class WormholePublished(Base):
     consistency_level = Column(Integer, nullable=True)
     emitter_address_32 = Column(String(66), nullable=False)  # bytes32 left-padded sender
     emitter_chain_id = Column(Integer, nullable=False)  # Wormhole chain id
+    amount = Column(Numeric(30, 0), nullable=True)  # extracted from payload for VAA types 1 and 3
 
 
 class WormholeRedeemed(Base):
